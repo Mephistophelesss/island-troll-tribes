@@ -3,7 +3,7 @@ import ClosureTimers
 import ClosureForGroups
 import ClosuresForItems
 import LinkedList
-import ID
+import LocalObjectIDs
 
 rect elk_run = Rect(2880, -11264, 2944, -11200)
 rect fire_location = Rect(2816, -11136, 2944, -11008)
@@ -28,9 +28,9 @@ class RecipeIslandDemo
         this.flint = createItem(ITEM_FLINT, gatherer_spawn.getCenter() + vec2(-100, 0))
         this.stick = createItem(ITEM_STICK, gatherer_spawn.getCenter() + vec2(-100, -150))
         this.gatherer = CreateUnit(playerFromIndex(PLAYER_NEUTRAL_PASSIVE), UNIT_GATHERER, gatherer_spawn.getCenterX(), gatherer_spawn.getCenterY(), 0)
-        this.gatherer.setBaseDamage(45, 1)
         this.gatherer.setHP(this.gatherer.getMaxHP() - 175)
         this.elk = CreateUnit(playerFromIndex(PLAYER_NEUTRAL_AGGRESSIVE), UNIT_ELK, elk_run.getCenterX(), elk_run.getCenterY(), 0)
+        this.elk.setHP(25)
 
         //Keep elk from escaping with random wander
         this.elkMoverLoop = doPeriodically(0.05) cb ->
@@ -131,7 +131,7 @@ class RecipeIslandDemo
 
     function cleanUpPhase()
         forUnitsInRect(gg_rct_vision) u ->
-            if u.getTypeId() == UNIT_FIRE or u.getTypeId() == UNIT_MEAT
+            if u.getTypeId() == UNIT_FIRE or u.getTypeId() == UNIT_MEAT or u.getTypeId() == UNIT_FAWN
                 u.remove()
         if this.gatherer != null
             gatherer.remove()
@@ -159,7 +159,7 @@ init
         if (demo.isFinished)
             demosPlayed += 1
             destroy demo
-            if (demosPlayed < 2)
+            if (demosPlayed < 15)
                 demo = new RecipeIslandDemo()
                 demo.startNewDemo()
             else

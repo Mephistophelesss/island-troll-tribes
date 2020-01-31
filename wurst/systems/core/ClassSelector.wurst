@@ -1,18 +1,24 @@
 package ClassSelector
-import RegisterEvents
-import LinkedList
+
+// Local imports:
 import ClosureTimers
-import TimerUtils
-import TimerDialog
-import TimerExtensions
-import UnitExtensions
-import PlayerExtensions
-import UnitPoolExtensions
-import Lodash
+import HashMap
+import LinkedList
+import RegisterEvents
+
+// Third-party imports:
+import LodashExtensions
+
+// Local imports:
+import ColorUtils
 import GameConfig
-import GameMode
+import LocalObjectIDs
+import PlayerExtensions
+import StringExtensions
+import UnitExtensions
+import UnitPoolExtensions
+import TimerUtils
 import Tribe
-import PublicLibrary
 
 let UNIT_TROLL_TOTEM = 'o00H'
 
@@ -37,50 +43,34 @@ public function registerClassSelectionEndEvent(code listener)
     listeners.addAction(listener)
 
 public class ClassSelector
-    static let spawns = new IterableMap<unit, thistype>()
+    static let spawners = new IterableMap<unit, thistype>()
 
     static function findByTotem(unit totem) returns thistype
-        return spawns.get(totem)
-
-    static function resetAllianceState()
-        for i = 0 to PLAYER_NEUTRAL_AGGRESSIVE - 1
-            for j = 0 to PLAYER_NEUTRAL_AGGRESSIVE - 1
-                if i != j
-                    SetPlayerAllianceStateBJ(players[i], players[j], bj_ALLIANCE_UNALLIED)
-
-    static function initializeTribes()
-        let numTribes = gameConfig.getNumTribes()
-        for tribeId = 0 to numTribes - 1
-            new Tribe(tribeId)
+        return spawners.get(totem)
 
     static function initializeSpawns()
         let randomSpawns = gameConfig.getRandomSpawns()
-        let numUndefeatedTribes = Tribe
-            .getTribes()
-            .filter(Tribe.isNotDefeated)
-            .length()
-        let numTribes = max(numUndefeatedTribes, randomSpawns)
+        let tribes = Tribe.getTribes()
+        let numTribes = max(tribes.length(), randomSpawns)
 
         let spawns = spawnList.take(numTribes)
         if randomSpawns > 0
             spawns.shuffle()
 
-        Tribe.getTribes().map() tribe ->
-            let spawn = spawns.get(tribe.getId())
+        for tribe in tribes
+            let spawn = spawns.dequeue()
             tribe.setSpawn(spawn)
-            return new ClassSelector(tribe)
+            new ClassSelector(tribe)
 
     static function startClassSelection()
-        resetAllianceState()
-        initializeTribes()
         initializeSpawns()
 
         var selectionTime = 0
 
         if not gameConfig.isAllTrollEnabled()
             selectionTime = gameConfig.getSelectionTimeAllowed()
-            print(GENERAL_COLOR + "Choose a troll class|r")
-            print(GENERAL_COLOR + "You will be appointed a random troll if you do not pick|r")
+            print("Choose a troll class.".color(GENERAL_COLOR))
+            print("Your class will be random otherwise.".color(GENERAL_COLOR))
 
         let clock = getTimer()
 
@@ -89,7 +79,7 @@ public class ClassSelector
         ..display(true)
 
         clock.doAfter(selectionTime.toReal()) ->
-            values(spawns).each(spawner -> spawner.endSelection())
+            spawners.values().each(spawner -> spawner.endSelection())
             listeners.execute()
             clockDialog.destr()
 
@@ -97,8 +87,7 @@ public class ClassSelector
         registerPlayerUnitEvent(EVENT_PLAYER_UNIT_SELL) ->
             findByTotem(GetSellingUnit()).handleUnitSold()
 
-        GameMode.onModeSelectionFinish() ->
-            startClassSelection()
+        registerTribeInitializationFinishEvent(function startClassSelection)
 
     Tribe tribe
     let pickers = new LinkedList<unit>()
@@ -116,7 +105,7 @@ public class ClassSelector
             initializePool()
             initializePickers()
 
-            spawns.put(totem, this)
+            spawners.put(totem, this)
 
     private function initializeTotem()
         let pos = spawn.getCenter()
@@ -198,15 +187,12 @@ public class ClassSelector
 
         setClassUnavailable(trollId)
         totem.removeUnitFromStock(trollId)
-        udg_trolls.addUnit(troll)
-        udg_PUnits[owner.getId()] = troll
+        owner.setTroll(troll)
 
-        setUpSkillTriggers(troll)
         troll
-        ..modifySkillPoints(-1)
-        ..suspendXp(true)
-        ..pause()
-        ..setHeat(gameConfig.getMaxHeat())
+            ..suspendXp(true)
+            ..pause()
+            ..setHeat(gameConfig.getMaxHeat())
 
         if gameConfig.isStartWithFire()
             troll.addItemById(ITEM_FIRE_KIT)
@@ -221,8 +207,7 @@ public class ClassSelector
 
         setClassAvailable(trollId)
         totem.addUnitToStock(trollId, 0, 1)
-        udg_trolls.removeUnit(troll)
-        udg_PUnits[owner.getId()] = null
+        owner.removeTroll()
 
         troll.remove()
         sold.remove()

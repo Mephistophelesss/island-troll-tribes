@@ -1,0 +1,97 @@
+package ToolTipsUtils
+
+// Standard library imports:
+import LinkedList
+
+// Local imports:
+import ColorUtils
+import StringExtensions
+
+function real.formatForTooltip() returns string
+    if this > 1 and this - this.toInt() != 0
+        return this.toString()
+    else if this < 1 and this > 0
+        return R2I(this * 100).toString()+"%"
+    else
+        return this.toInt().toString()
+
+public function makeToolTipNormHero(string hotkey, string tooltip, int level) returns string
+    return asList(
+        "[".color(GENERAL_COLOR),
+        hotkey.color(SPECIAL_COLOR),
+        ("] - " + tooltip + " - Level " + level.toString()).color(GENERAL_COLOR)
+    ).join()
+
+public function makeToolTipNorm(string hotkey, string tooltip) returns string
+    return asList(
+        "[".color(GENERAL_COLOR),
+        hotkey.color(SPECIAL_COLOR),
+        ("] - " + tooltip).color(GENERAL_COLOR)
+    ).join()
+
+public function makeToolTipNormAura(string tooltip) returns string
+    return tooltip.color(GENERAL_COLOR)
+
+public function makeToolTipLearn(string tooltip) returns string
+    return ("Learn " + tooltip + " Level %d").color(GENERAL_COLOR)
+
+public function makeToolTipNormHeroAura(string tooltip, int level) returns string
+    return (tooltip + " - Level " + level.toString()).color(GENERAL_COLOR)
+
+public function makeToolTipCooldown(real COOLDOWN) returns string
+    return " Has {0} seconds cooldown.".format(COOLDOWN.toToolTipLightBlue())
+
+public function makeToolTipDuration(real DURATION, real COOLDOWN) returns string
+    return " Lasts {0} seconds, has {1} seconds cooldown.".format(
+        DURATION.toToolTipLightBlue(),
+        COOLDOWN.toToolTipLightBlue()
+    )
+
+public function makeToolTipDuration(real DURATION_HERO, real DURATION_NORMAL, real COOLDOWN) returns string
+    return " Lasts {0} ({1}) seconds, has {2} seconds cooldown.".format(
+        DURATION_HERO.toToolTipLightBlue(),
+        DURATION_NORMAL.toToolTipLightBlue(),
+        COOLDOWN.toToolTipLightBlue()
+    )
+
+public function real.toToolTip() returns string
+    return this.formatForTooltip()
+
+public function real.toToolTipRed() returns string
+    return this.formatForTooltip().color(COLOR_RED)
+
+public function real.toToolTipGreen() returns string
+    return this.formatForTooltip().color(COLOR_GREEN)
+
+public function real.toToolTipBlue() returns string
+    return this.formatForTooltip().color(COLOR_BLUE)
+
+public function real.toToolTipTeal() returns string
+    return this.formatForTooltip().color(COLOR_TEAL)
+
+public function real.toToolTipOrange() returns string
+    return this.formatForTooltip().color(COLOR_ORANGE)
+
+public function real.toToolTipYellow() returns string
+    return this.formatForTooltip().color(COLOR_YELLOW)
+
+public function real.toToolTipPurple() returns string
+    return this.formatForTooltip().color(COLOR_PURPLE)
+
+public function real.toToolTipLightBlue() returns string
+    return this.formatForTooltip().color(COLOR_LIGHT_BLUE)
+
+public function real.toToolTipGray() returns string
+    return this.formatForTooltip().color(COLOR_GRAY)
+
+public function real.toToolTipDarkGreen() returns string
+    return this.formatForTooltip().color(COLOR_DARK_GREEN)
+
+public function real.toToolTipPink() returns string
+    return this.formatForTooltip().color(COLOR_PINK)
+
+public function real.toToolTipBrown() returns string
+    return this.formatForTooltip().color(COLOR_BROWN)
+
+public function int.formatStat() returns string
+    return this.toReal().toToolTipGreen()

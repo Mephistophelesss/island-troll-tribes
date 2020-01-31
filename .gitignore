@@ -6,7 +6,6 @@ wurst.dependencies
 /backups
 
 # Generated
-wurst/war3map.j
 bin/generated.j
 
 # VIM
@@ -20,6 +19,10 @@ tmp*
 # Other map files
 /*.w3x
 compiled-maps/*
+compiled.j.txt
 
 # Generated Changelog
 markdown_changelog.md
+
+# Python scripts
+__pycache__
