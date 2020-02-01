@@ -7,7 +7,7 @@ import HashMap
 import PickupItemTask
 import EmptyInventoryTask
 import Orders
-import ID
+import LocalObjectIDs
 
 LinkedList<rect> NW_WAYPOINTS = null
 public HashMap<AIPlayer, LinkedList<Waypoint>> aiWaypointMap = null

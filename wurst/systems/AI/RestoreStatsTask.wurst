@@ -4,7 +4,7 @@ import initlater AIPlayer
 import ClosureForGroups
 import Orders
 import UseSleepBuildingTask
-import ID
+import LocalObjectIDs
 
 constant let STUCK_RANGE_THRESHOLD = 300
 constant let PANIC_MINIMUM_ENERGY = 80

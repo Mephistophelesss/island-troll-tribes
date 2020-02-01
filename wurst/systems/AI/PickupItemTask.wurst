@@ -4,7 +4,7 @@ import AITask
 import initlater AIPlayer
 import LinkedList
 import Orders
-import ID
+import LocalObjectIDs
 
 constant let WAYPOINT_RANGE_THRESHOLD = 150
 constant let STUCK_RANGE_THRESHOLD = 300

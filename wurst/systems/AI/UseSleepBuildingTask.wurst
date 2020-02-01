@@ -30,8 +30,8 @@ public class UseSleepBuildingTask extends AITask
         if not areWeNearTargetBuilding()
             moveToTargetBuilding()
         else if (tryToSleepWithBuilding())
-                this.isCompleted = true
-                return
+            this.isCompleted = true
+            return
         else if runTime - lastUnstuckTimestamp >= 5 and this.runTime >= 5 and not areWeNearTargetBuilding()
             if(areWeStuck())
                 this.isCompleted = true

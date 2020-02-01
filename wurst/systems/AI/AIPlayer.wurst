@@ -14,7 +14,7 @@ import PickupItemTask
 import TrollPickTask
 import ExploreIslandTask
 import HashMap
-import ID
+import LocalObjectIDs
 
 public constant let ITEM_MEMORIZATION_RANGE = 6000
 public constant let BASE_ITEMS_RADIUS = 800.

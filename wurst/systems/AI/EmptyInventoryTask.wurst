@@ -5,7 +5,7 @@ import initlater AIPlayer
 import ClosureEvents
 import TerrainUtils
 import Orders
-import ID
+import LocalObjectIDs
 
 constant let WAYPOINT_RANGE_THRESHOLD = 350
 constant let STUCK_RANGE_THRESHOLD = 300
