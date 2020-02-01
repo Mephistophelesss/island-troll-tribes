@@ -80,7 +80,7 @@ public class HuntAnimalTask extends AITask
         if not targetInRange or not targetIsVisible
             moveToTargetPosition()
         else if targetInRange and targetIsVisible
-            if not targetUnit.isCrowdControlled() and not targetInMeleeRange
+            if not targetUnit.isImmobilized() and not targetInMeleeRange
                 if (ai.tryToEnsnareTarget(targetUnit))
                     ai.timeBeforeNextOrder = 0.3
                 else
@@ -106,13 +106,13 @@ public class HuntAnimalTask extends AITask
         let targetIsVisible = IsUnitVisible(targetUnit, ai.owner)
         let targetInMeleeRange = isTargetInRange(170)
 
-        if not targetInRange or not targetIsVisible or (not ai.isEnsnareReady() and not targetUnit.isCrowdControlled())
+        if not targetInRange or not targetIsVisible or (not ai.isEnsnareReady() and not targetUnit.isImmobilized())
             if not isTargetInRange(1000)
                 moveToTargetPosition()
             else
                 directMoveToTargetPosition()
         else if targetInRange and targetIsVisible
-            if not targetUnit.isCrowdControlled()
+            if not targetUnit.isImmobilized()
                 if (ai.tryToEnsnareTarget(targetUnit))
                     ai.timeBeforeNextOrder = 0.3
             else if ai.tryToTrackTarget(targetUnit)

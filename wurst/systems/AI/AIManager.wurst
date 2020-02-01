@@ -39,7 +39,7 @@ init
         initAIWaypointsLists(ai)
 
     if AIs.size() > 0
-        registerGameStartEvent() ->
+        /*registerGameStartEvent() ->
             //Share control and set game start flag to true for AIs
             let allianceArgs1 = new LinkedList<string>()
             let allianceArgs2 = new LinkedList<string>()
@@ -51,7 +51,7 @@ init
                 handlePlayerAllianceSettingToggle(ai.owner, allianceArgs2)
 
             destroy allianceArgs1
-            destroy allianceArgs2
+            destroy allianceArgs2*/
 
         GameMode.onModeSelectionFinish() ->
             doPeriodically(AI_UPDATE_PERIOD) cb ->

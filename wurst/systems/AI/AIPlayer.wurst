@@ -268,7 +268,7 @@ public class AIPlayer
                         this.averageClusterPos = vec2(0,0)
                         tempGroup.forEachIn() u2 ->
                             this.averageClusterPos = this.averageClusterPos + u2.getPos()
-                        this.averageClusterPos = this.averageClusterPos.op_div(this.biggestClusterFound.toReal())
+                        this.averageClusterPos = this.averageClusterPos.op_divReal(this.biggestClusterFound.toReal())
                     tempGroup.destr()
 
             if this.biggestClusterFound >= 2
