@@ -20,6 +20,7 @@ import TimerUtils
 import Tribe
 
 let UNIT_TROLL_TOTEM = 'o00H'
+public HashMap<Tribe, ClassSelector> selectorPools
 
 let spawnList = asList(
     gg_rct_revive_1,
@@ -51,6 +52,7 @@ public class ClassSelector
         let randomSpawns = gameConfig.getRandomSpawns()
         let tribes = Tribe.getTribes()
         let numTribes = max(tribes.length(), randomSpawns)
+        selectorPools = new HashMap<Tribe, ClassSelector>()
 
         let spawns = spawnList.take(numTribes)
         if randomSpawns > 0
@@ -59,7 +61,7 @@ public class ClassSelector
         for tribe in tribes
             let spawn = spawns.dequeue()
             tribe.setSpawn(spawn)
-            new ClassSelector(tribe)
+            selectorPools.put(tribe, new ClassSelector(tribe))
 
     static function startClassSelection()
         initializeSpawns()
@@ -167,6 +169,9 @@ public class ClassSelector
 
     function getRandomTrollId() returns int
         return pool.get(GetRandomInt(0, pool.size()-1))
+
+    function getClassAvailable() returns LinkedList<int>
+        return pool
 
     function placeRandomTroll(player p) returns unit
         return createUnit(p, getRandomTrollId(), spawn.randomPoint(), angle(0))

@@ -33,6 +33,7 @@ class GameConfig
     var MAX_ANIMALS = 60
     var tribeOwnsBuildingsEnabled = true
     var playerScoreEnabled = true
+    var aiEnabled = false
 
     function setHeatPerCast(int amount)
         heatPerCast = amount
@@ -232,5 +233,10 @@ class GameConfig
         if value > 1
             startingLevel = value
 
+    function setAIEnabled(bool value)
+        aiEnabled = value
+
+    function isAIEnabled() returns bool
+        return aiEnabled
 
 public constant gameConfig = new GameConfig()

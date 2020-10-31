@@ -1,0 +1,35 @@
+package Computer
+import PlayerExtensions
+import ClosureTimers
+
+public real UPDATE_INTERVAL = 2.0
+
+public class Computer
+    player  owner
+    unit    troll
+    real    runTime
+
+    construct(player owner, unit troll)
+        this.owner  = owner
+        this.troll  = troll
+
+        // loop ends when computer tribe is defeated (we can possibly change it to when troll dies if revive is disabled)
+        doPeriodically(UPDATE_INTERVAL) cb ->
+            // Here we run the decision making algorithm and juggle between possible states depending on multiple factors
+            // (stats, inventory, raw meat, vision of enemy, ...)
+            runTime += UPDATE_INTERVAL
+            if(owner.getTribe().isDefeated())
+                destroy cb
+                destroy this
+
+
+    function chat(string message)
+        owner.getTribe().getMembers().forEach() member ->
+            printTimedToPlayer(owner.getColor().toColor().toColorString() + troll.getName() + " (BOT)|r: " + message, 10, member)
+
+    function getTroll() returns unit
+        return troll
+            
+    function getPlayer() returns player
+        return owner
+

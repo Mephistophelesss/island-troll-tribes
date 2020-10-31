@@ -1,0 +1,184 @@
+package Computers
+
+// Standard library imports:
+import ClosureForGroups
+import ClosureTimers
+import HashMap
+import LinkedList
+import RegisterEvents
+
+// Third-party imports:
+import LodashExtensions
+
+// Local imports:
+import ClassSelector
+import Computer
+import Game
+import GameConfig
+import LocalObjectIDs
+import PlayerExtensions
+import Tribe
+import UnitExtensions
+
+LinkedList<Computers> computersList = null
+LinkedList<Draft> draftList = null
+
+class Draft
+    IterableMap<player, unit> draft
+    IterableMap<player, int> candidate
+    LinkedList<int> preference
+    LinkedList<int> pool
+    Tribe tribe
+    unit totem
+    bool isDraft
+    construct(Tribe tribe)
+        draft = new IterableMap<player, unit>()
+        candidate = new IterableMap<player, int>()
+        preference = new LinkedList<int>()
+        pool = new LinkedList<int>()
+        this.tribe = tribe
+        isDraft = false
+        forUnitsInRect(tribe.getSpawn()) u ->
+            if u.getTypeId() == UNIT_TROLL_TOTEM
+                this.totem = u
+
+        // Prefered class is at the top of the stack
+        preference
+        // Caster class will prioritized last
+        ..add(UNIT_PRIEST)
+        ..add(UNIT_MAGE)
+        // Gathering class comes second
+        ..add(UNIT_THIEF)
+        ..add(UNIT_SCOUT)
+        ..add(UNIT_GATHERER)
+        // Hunting class comes first
+        ..add(UNIT_BEAST_MASTER)
+        ..add(UNIT_HUNTER)
+
+        for member in tribe.getMembers()
+            if member.getController() == MAP_CONTROL_COMPUTER
+                draft.put(member, null)
+
+        if draft.size() == 0
+            destroy this
+        else
+            updateCandidate()
+    
+    function drafting()
+        if GetSellingUnit() == totem
+            if isDraft
+                if candidate.has(GetSoldUnit().getOwner())
+                    if GetSoldUnit().getTypeId() == candidate.get(GetSoldUnit().getOwner())
+                        draft.put(GetSoldUnit().getOwner(), GetSoldUnit())
+            else
+                updateCandidate()
+
+    function updateCandidate()
+        // TODO: maybe there's a better way to get the selection pool
+        if selectorPools.has(tribe)
+            // How do you set destroyOnClose() to false so I dont have to make copies here
+            pool = selectorPools.get(tribe).getClassAvailable().copy().intersection(preference.copy())
+        for key in draft
+            if not candidate.get(key) == pool.peek()
+                candidate.put(key, pool.pop())
+                // TODO: create a new function to get class name from its unitid instead of getting it by creating a new unit
+                let temp = createUnit(key, candidate.get(key), tribe.getSpawn().getCenter(), angle(0))
+                key.getTribe().getMembers().forEach() member ->
+                    printTimedToPlayer(key.getColor().toColor().toColorString() + key.getName() + " (BOT)|r: " + " I will pick " + temp.getName() , 10, member)
+                temp.remove()
+
+    function pick()
+        isDraft = true
+        printTimedToPlayer(draft.size().toString(), 10, players[6])
+        for key in draft
+            IssueNeutralImmediateOrderById(key, totem, candidate.get(key))
+
+    static function random(Tribe tribe) returns IterableMap<player, unit>
+        let draft = new IterableMap<player, unit>
+        tribe.getMembers().forEach() member ->
+            if member.getController() == MAP_CONTROL_COMPUTER
+                draft.put(member, null)
+        forUnitsInRect(tribe.getSpawn()) u ->
+            if draft.has(u.getOwner())
+                draft.put(u.getOwner(), u)
+        return draft
+
+    function getDraft() returns IterableMap<player,unit>
+        return draft
+
+    function getTribe() returns Tribe
+        return tribe
+
+    ondestroy
+        destroy draft
+        destroy pool
+        destroy preference
+
+class Computers
+    LinkedList<Computer> computers = null
+    Tribe tribe
+
+    construct(IterableMap<player, unit> draft, Tribe tribe)
+        computers = new LinkedList<Computer>()
+        this.tribe = tribe
+        draft.forEach() (player key, unit value) ->
+            computers.add(new Computer(key, value))
+        computers.forEach() computer ->
+            computer.chat(computer.getTroll().getName())
+        if computers.size() == 0
+            destroy this
+
+    function getTribe() returns Tribe
+        return tribe
+
+    function remove(Computer computer)
+        computers.remove(computer)
+
+        if computers.size() == 0
+            destroy this
+
+    ondestroy
+        destroy computers
+init
+    // Game start (after class selection)
+    registerGameStartEvent() ->
+        if gameConfig.isAIEnabled()
+            computersList = new LinkedList<Computers>()
+            // If computer has to random, we do it here
+            if gameConfig.getSelectionTimeAllowed() <= 2
+                Tribe.getTribes().forEach() tribe ->
+                    computersList.push(new Computers(Draft.random(tribe), tribe))
+            else
+                draftList.forEach() draft ->
+                    computersList.push(new Computers(draft.getDraft(), draft.getTribe()))
+                    destroy draft
+            destroy draftList
+    // Selection time
+    registerTribeInitializationFinishEvent() ->
+        if gameConfig.isAIEnabled()
+            // We initialize the computer class selection for every team
+            draftList = new LinkedList<Draft>()
+            if (gameConfig.getSelectionTimeAllowed() > 2)
+                for tribe in Tribe.getTribes()
+                    draftList.push(new Draft(tribe))
+                // If selection time is smaller than 2 seconds there's not enough time to pick so computer will random
+                doAfter(gameConfig.getSelectionTimeAllowed() - 1.0) ->
+                    draftList.forEach() draft ->
+                        draft.pick() 
+
+    // Handles totem selling units
+    registerPlayerUnitEvent(EVENT_PLAYER_UNIT_SELL) ->
+        if gameConfig.isAIEnabled()
+            draftList.forEach() draft ->
+                draft.drafting()
+
+    // Handles destruction of bot >:)
+    registerPlayerUnitEvent(EVENT_PLAYER_UNIT_DEATH) ->
+        if gameConfig.isAIEnabled()
+            if GetDyingUnit().isTroll()
+                computersList.forEach() computers ->
+                    if computers.getTribe().isDefeated()
+                        computersList.remove(computers)
+                if computersList.size() == 0
+                    destroy computersList
+                    
