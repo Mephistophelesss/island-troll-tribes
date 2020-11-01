@@ -23,6 +23,16 @@ import UnitExtensions
 LinkedList<Computers> computersList = null
 LinkedList<Draft> draftList = null
 
+/**
+    Draft classes for the computer during selection time. Drafting is divised in 2 phases :
+        Candidate drafting phase:
+            It will choose a candidate class from the selection pool and the preference, and it will warn the player what class
+            it intends to pick. If the player select a class that the computer was intending to pick then it will redraft its
+            candidate class.
+        Drafting phase:
+            When one second is left in selection time the computer will pick the class it has for candidate and update its IterableMap
+            accordingly. The goal of drafting is to have a map "draft" with the computer playerId for key and the troll unit for value. 
+*/
 class Draft
     IterableMap<player, unit> draft
     IterableMap<player, int> candidate
@@ -31,6 +41,14 @@ class Draft
     Tribe tribe
     unit totem
     bool isDraft
+
+    /**
+        Draft object are made for every tribe. when the object is constructed it checks to see if the tribe has any member that is
+        controlled by a computer player. If it has one then the object is valid and it initialize the drafting. If it does not have
+        any computer player then it destroys itself.
+        @param Tribe
+            Tribe object that handles team related manipulations
+    */
     construct(Tribe tribe)
         draft = new IterableMap<player, unit>()
         candidate = new IterableMap<player, int>()
@@ -64,6 +82,10 @@ class Draft
         else
             updateCandidate()
     
+    /**
+        drafting can be called when a unit is sold. Depending on the phase, it either updates the candidate map or it updates
+        the draft map.
+    */
     function drafting()
         if GetSellingUnit() == totem
             if isDraft
@@ -73,6 +95,11 @@ class Draft
             else
                 updateCandidate()
 
+    /**
+        updateCandidate will update the selection pool and then compare the current candidate draft with the selection pool to
+        see if the candidate classes are still available. It only redraft if the candidate class it removed from the pool, if sortWith() (T o1, T o2) ->
+        then it warns the player what new class it intends to pick.
+    */
     function updateCandidate()
         // TODO: maybe there's a better way to get the selection pool
         if selectorPools.has(tribe)
@@ -83,19 +110,26 @@ class Draft
                 candidate.put(key, pool.pop())
                 // TODO: create a new function to get class name from its unitid instead of getting it by creating a new unit
                 let temp = createUnit(key, candidate.get(key), tribe.getSpawn().getCenter(), angle(0))
-                key.getTribe().getMembers().forEach() member ->
+                for member in key.getTribe().getMembers()
                     printTimedToPlayer(key.getColor().toColor().toColorString() + key.getName() + " (BOT)|r: " + " I will pick " + temp.getName() , 10, member)
                 temp.remove()
-
+    /**
+        pick is called to begin the second phase of drafting, it will order each bot to buy their candidate hero.
+    */
     function pick()
         isDraft = true
-        printTimedToPlayer(draft.size().toString(), 10, players[6])
         for key in draft
             IssueNeutralImmediateOrderById(key, totem, candidate.get(key))
 
+    /**
+        random is a static method used to handle cases where the selection time is so small that it is impossible to pick a class.
+        @param Tribe
+            Tribe object that handles team related manipulations
+        @return IterableMap of the computers playerId and their troll unit.
+    */
     static function random(Tribe tribe) returns IterableMap<player, unit>
         let draft = new IterableMap<player, unit>
-        tribe.getMembers().forEach() member ->
+        for member in tribe.getMembers()
             if member.getController() == MAP_CONTROL_COMPUTER
                 draft.put(member, null)
         forUnitsInRect(tribe.getSpawn()) u ->
@@ -103,9 +137,16 @@ class Draft
                 draft.put(u.getOwner(), u)
         return draft
 
+    /**
+        getDraft accessor for the IterableMap draft.
+        @return IterableMap of the computers playerId and their troll unit.
+    */
     function getDraft() returns IterableMap<player,unit>
         return draft
-
+    /**
+        getTribe accessor for the object Tribe.
+        @return Tribe of the drafting.
+    */
     function getTribe() returns Tribe
         return tribe
 
@@ -114,23 +155,40 @@ class Draft
         destroy pool
         destroy preference
 
+/**
+    Computers objects will handles any team related manipulation of the computers. Anything that needs the synchronicity of the 
+    computers will be handled by methods (or possibly team states). i.e. Meta-gaming for crafting, attacks on enemy base, 
+    defense of ally base, boss killing, etc.
+*/
 class Computers
     LinkedList<Computer> computers = null
     Tribe tribe
 
+    /**
+        Computers object are made from draft map made from valid Draft objects or from the static method random. If the draft is empty
+        then the object is invalid and it destroy itself (only way to get an empty draft is if the static method random was used),
+        otherwise the object is valid and the tribe has at least one computer.
+    */
     construct(IterableMap<player, unit> draft, Tribe tribe)
         computers = new LinkedList<Computer>()
         this.tribe = tribe
-        draft.forEach() (player key, unit value) ->
-            computers.add(new Computer(key, value))
-        computers.forEach() computer ->
-            computer.chat(computer.getTroll().getName())
+        for p in draft
+            computers.add(new Computer(p, draft.get(p)))
         if computers.size() == 0
             destroy this
 
+    /**
+        getTribe accessor for the object Tribe.
+        @return Tribe of the computers.
+    */
     function getTribe() returns Tribe
         return tribe
 
+    /**
+        remove is a method to remove a specific computer from the group of computers
+        @param Computer
+            Computer object that handles the control of the computer
+    */
     function remove(Computer computer)
         computers.remove(computer)
 
@@ -139,44 +197,40 @@ class Computers
 
     ondestroy
         destroy computers
+
 init
-    // Game start (after class selection)
+    // Beginning of the grace period
     registerGameStartEvent() ->
         if gameConfig.isAIEnabled()
             computersList = new LinkedList<Computers>()
-            // If computer has to random, we do it here
             if gameConfig.getSelectionTimeAllowed() <= 2
-                Tribe.getTribes().forEach() tribe ->
+                for tribe in Tribe.getTribes()
                     computersList.push(new Computers(Draft.random(tribe), tribe))
             else
-                draftList.forEach() draft ->
+                for draft in draftList
                     computersList.push(new Computers(draft.getDraft(), draft.getTribe()))
                     destroy draft
             destroy draftList
-    // Selection time
+    // Beginning of the selection time
     registerTribeInitializationFinishEvent() ->
         if gameConfig.isAIEnabled()
-            // We initialize the computer class selection for every team
             draftList = new LinkedList<Draft>()
             if (gameConfig.getSelectionTimeAllowed() > 2)
                 for tribe in Tribe.getTribes()
                     draftList.push(new Draft(tribe))
-                // If selection time is smaller than 2 seconds there's not enough time to pick so computer will random
                 doAfter(gameConfig.getSelectionTimeAllowed() - 1.0) ->
-                    draftList.forEach() draft ->
+                    for draft in draftList
                         draft.pick() 
 
-    // Handles totem selling units
     registerPlayerUnitEvent(EVENT_PLAYER_UNIT_SELL) ->
         if gameConfig.isAIEnabled()
-            draftList.forEach() draft ->
+            for draft in draftList
                 draft.drafting()
 
-    // Handles destruction of bot >:)
     registerPlayerUnitEvent(EVENT_PLAYER_UNIT_DEATH) ->
         if gameConfig.isAIEnabled()
             if GetDyingUnit().isTroll()
-                computersList.forEach() computers ->
+                for computers in computersList
                     if computers.getTribe().isDefeated()
                         computersList.remove(computers)
                 if computersList.size() == 0
