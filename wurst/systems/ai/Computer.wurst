@@ -1,31 +1,125 @@
 package Computer
 import PlayerExtensions
 import ClosureTimers
+import Trolls
+import LinkedList
+import Geometry
+import Tribe
+import initlater State
+import initlater StateAttacking
+import initlater StateFleeing
+import initlater StateGathering
+import initlater StateHunting
+import initlater StateIdle
 
-public real UPDATE_INTERVAL = 2.0
+public real UPDATE_INTERVAL = 0.2
+
+// Role dictactes if it should prioritize hunting or gathering
+enum Roles
+    HUNTER
+    GATHERER
+
+// Enumeration of all the possible states
+public enum States
+    ATTACKING 
+    HUNTING
+    FLEEING
+    GATHERING
 
 public class Computer
-    player  owner
-    unit    troll
-    real    runTime
+    private player  owner
+    private unit    troll
+    private Tribe   tribe
+    private real    runTime
+    private Space   space
+    private States  currentState
+    private States  nextState
+    private State   state
+    private Roles   role
 
-    construct(player owner, unit troll)
+    construct(player owner, unit troll, Tribe tribe)
         this.owner  = owner
         this.troll  = troll
+        this.tribe  = tribe
+        initialize()
 
-        // loop ends when computer tribe is defeated (we can possibly change it to when troll dies if revive is disabled)
         doPeriodically(UPDATE_INTERVAL) cb ->
             // Here we run the decision making algorithm and juggle between possible states depending on multiple factors
             // (stats, inventory, raw meat, vision of enemy, ...)
+            state.update(this.runTime)
             runTime += UPDATE_INTERVAL
             if(owner.getTribe().isDefeated())
                 destroy cb
                 destroy this
 
+    function transition(States targetState)
+        if not state == null
+            state = state.close()
+        this.currentState = targetState
+        switch currentState
+            case ATTACKING
+                state = new Attacking(this, runTime)
+                chat("I'm attacking")
+            case HUNTING
+                state = new Hunting(this, runTime)
+                chat("I'm hunting")
+            case FLEEING
+                state = new Fleeing(this, runTime)
+                chat("I'm fleeing")
+            case GATHERING
+                state = new Gathering(this, runTime)
+                chat("I'm gathering")
+            default
+                state = new Idle(this, runTime)
+                chat("I'm idle")
+
+    private function updateRole(Roles role)
+        this.role = role
+        switch role
+            case HUNTER
+                transition(States.HUNTING)
+                chat("My role is hunter")
+            case GATHERER
+                transition(States.GATHERING)
+                chat("My role is gatherer")
+            default
+                transition(States.GATHERING)
+
+    private function findRole()
+        // Bit hacky but it will do for now
+        let i = 1 // i := True.toInt() = 1
+        let entity = UnitEntity.findForUnit(this.troll)
+        switch i
+            case (entity instanceof Hunter).toInt()
+                updateRole(Roles.HUNTER)
+            case (entity instanceof BeastMaster).toInt()
+                updateRole(Roles.HUNTER)
+            case (entity instanceof Gatherer).toInt()
+                updateRole(Roles.GATHERER)
+            case (entity instanceof Thief).toInt()
+                updateRole(Roles.GATHERER)
+            case (entity instanceof Scout).toInt()
+                updateRole(Roles.GATHERER)
+            case (entity instanceof Priest).toInt()
+                updateRole(Roles.GATHERER)
+            case (entity instanceof Mage).toInt()
+                updateRole(Roles.GATHERER)
+            default
+                updateRole(Roles.GATHERER)
+                
+    private function initialize()
+        findRole()
+        this.space = new Space(tribe.getSpawn())
 
     function chat(string message)
         owner.getTribe().getMembers().forEach() member ->
             printTimedToPlayer(owner.getColor().toColor().toColorString() + troll.getName() + " (BOT)|r: " + message, 10, member)
+
+    function getSpace() returns Space
+        return space
+
+    function getCurrentState() returns States
+        return currentState
 
     function getTroll() returns unit
         return troll

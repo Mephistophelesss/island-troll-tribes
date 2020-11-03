@@ -1,0 +1,47 @@
+package StateHunting
+
+import State
+import Computer
+import Geometry
+import LinkedList
+import LocalObjectIDs
+import OrderIds
+
+public class Hunting extends State
+    unit target
+    Point waypoint
+    construct(Computer computer, real runTime)
+        super(computer, runTime)
+    override function update(real runTime)
+        if waypoint == null
+            waypoint = new Point(computer.getSpace().getRandomPoint())
+        else if computer.getTroll().getPos().inRange(waypoint.getTarget(), 10)
+            waypoint = waypoint.close()
+            if (waypoint == null)
+                print("wow it set it to null")
+        else if(target == null)
+            print("Waypoint : " + waypoint.getTarget().toString())
+            print("Current Position : " + computer.getTroll().getPos().toString())
+            move(waypoint.getTarget())
+            let temp = CreateGroup()
+            ..enumUnitsInRange(computer.getTroll().getPos(), 8000, Filter(-> begin 
+                return GetFilterUnit().getOwner() == players[PLAYER_NEUTRAL_AGGRESSIVE] and GetFilterUnit().isAlive()
+            end))
+            for u in temp
+                if not IsUnitVisible(u, computer.getPlayer())
+                    temp.removeUnit(u)
+            let sortDistance = temp.asList()
+            sortDistance.sortWith(unitDistanceCp)
+
+            for u in sortDistance
+                if(u.getTypeId() == UNIT_ELK)
+                    target = u
+                    break
+        else
+            if target.isAlive()
+                print("Hunting : " + target.getName() + ", Position :" + target.getPos().toString())
+                move(target.getPos())
+                if target.getPos().distanceToSq(computer.getTroll().getPos()) < 150
+                    computer.getTroll().issueTargetOrderById(OrderIds.web, target)
+            else
+                target = null

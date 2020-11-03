@@ -1,0 +1,28 @@
+package State
+
+import initlater Computer
+import LinkedList
+import OrderIds
+
+interface Predicate<T>
+    function update(real runTime)
+
+public abstract class State implements Predicate<State>
+    Computer computer
+    Comparator<unit> unitDistanceCp
+    real localRunTime
+    real runTime
+    construct(Computer computer, real runTime)
+        this.computer = computer
+        this.localRunTime = -runTime
+        this.unitDistanceCp = (a, b) -> unitDistanceSort(a,b)
+
+    function move(vec2 target)
+        computer.getTroll().issuePointOrderById(Orders.moveAI, target)
+
+    function unitDistanceSort(unit a, unit b) returns int
+        return (computer.getTroll().getPos().distanceToSq(a.getPos()) - computer.getTroll().getPos().distanceToSq(b.getPos())).round()
+
+    function close() returns thistype
+        destroy this
+        return null

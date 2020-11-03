@@ -1,0 +1,10 @@
+package StateGathering
+
+import Computer
+import State
+
+public class Gathering extends State
+    construct(Computer computer, real runTime)
+        super(computer, runTime)
+    
+    override function update(real runTime)

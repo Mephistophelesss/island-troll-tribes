@@ -1,0 +1,10 @@
+package StateIdle
+import Computer
+import State
+
+public class Idle extends State
+    construct(Computer computer, real runTime)
+        super(computer, runTime)
+
+    override function update(real runTime)
+        skip

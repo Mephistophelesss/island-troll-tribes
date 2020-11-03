@@ -1,0 +1,150 @@
+package Geometry
+import LinkedList
+import ErrorHandling
+import TerrainUtils
+
+LinkedList<Set> islands
+
+public class Point
+    private vec2 target
+    private bool isWalkable
+    construct(vec2 target)
+        this.target = target
+    // TODO: Maybe there's a better way to overload the constructor
+    construct(vec2 target, bool checkWalkable)
+        if target.isTerrainWalkable() and  checkWalkable
+            this.target = target
+            this.isWalkable = true
+        else
+            this.target = target
+            this.isWalkable = false
+
+    function getTarget() returns vec2
+        return this.target
+
+    function isWalkable() returns bool
+        return isWalkable
+
+    function close() returns thistype
+        destroy this
+        return null
+
+class Set
+    private LinkedList<rect> subSets
+    private LinkedList<rect> invalidSet
+    private region familySet
+    construct()
+        subSets = new LinkedList<rect>()
+        invalidSet = new LinkedList<rect>()
+        familySet = CreateRegion()
+
+    function union(rect r)
+        subSets.add(r)
+        familySet.addRect(r)
+    
+    function minus(rect r)
+        // There surely is a better way to do this but im way too tired rn
+        // We need to take all the corner points and the center one
+        var hasPoint = false
+        if r.getRightBot().isInRegion(familySet)
+            hasPoint = true
+        else if r.getRightTop().isInRegion(familySet)
+            hasPoint = true
+        else if r.getLeftBot().isInRegion(familySet)
+            hasPoint = true
+        else if r.getLeftTop().isInRegion(familySet)
+            hasPoint = true
+        else if r.getCenter().isInRegion(familySet)
+            hasPoint = true
+        if hasPoint == true
+            invalidSet.add(r)
+                    
+
+    function has(vec2 point) returns bool
+        var isValid = true
+        for elements in invalidSet
+            if elements.contains(point)
+                isValid = false
+                break
+        return point.isInRegion(familySet) and isValid
+
+    function getRandomElement() returns vec2
+        if not subSets.isEmpty()
+            let points = new LinkedList<Point>()
+            while points.isEmpty()
+                for elements in subSets
+                    let point = new Point(elements.randomPoint(), true)
+                    if point.isWalkable() and this.has(point.getTarget())
+                        points.add(point)
+                        print(points.size().toString())
+                    else
+                        point.close()
+            points.shuffle()
+            return points.peek().getTarget()
+        else
+            error("ERROR: Trying to get random point from empty Set object defined in Space package!")
+            return vec2(0,0)
+
+    function getRect() returns rect
+        // Let's initialize the point in the center of one of the subset rect
+        vec2 array[4] points = [subSets.peek().getCenter(), subSets.peek().getCenter(), subSets.peek().getCenter(), subSets.peek().getCenter()]
+        for elements in subSets
+            // Top left
+            if elements.getLeftTop().x < points[0].x and elements.getLeftTop().y > points[0].y
+                points[0] = elements.getLeftTop()
+            // Top right
+            if elements.getRightTop().x > points[1].x and elements.getRightTop().y > points[1].y
+                points[1] = elements.getRightTop()
+            // Bot left
+            if elements.getLeftBot().x < points[2].x and elements.getLeftBot().y < points[2].y
+                points[2] = elements.getLeftBot()
+            // Bot right
+            if elements.getRightBot().x > points[3].x and elements.getRightBot().y < points[3].y
+                points[3] = elements.getRightBot()
+        return Rect(points[0].x < points[2].x ? points[0].x : points[2].x,
+                    points[2].y < points[3].y ? points[2].y : points[3].y,
+                    points[1].x > points[3].x ? points[1].x : points[3].x,
+                    points[0].y > points[1].y ? points[0].y : points[1].y)
+
+public class Space
+    private Set currentIsland
+
+    construct(rect spawn)
+        for island in islands
+            // Maybe set should take rect instead of vec2 points for attribute in has method
+            if island.has(spawn.getCenter())
+                currentIsland = island
+
+    function getRandomPoint() returns vec2
+        return currentIsland.getRandomElement()
+
+
+init
+    // Linked List of island clockwise starting from north west and ending with South west (stack is counter clockwise)
+    islands = new LinkedList<Set>()
+    // North west island
+    ..add(new Set()
+        ..union(gg_rct_spawn_area_1_1)
+        ..union(gg_rct_spawn_area_1_2)
+        ..union(gg_rct_spawn_area_1_3)
+        ..minus(gg_rct_Thief_Bush_Cliff_NW))
+    // North east island
+    ..add(new Set()
+        ..union(gg_rct_spawn_area_2_1)
+        ..union(gg_rct_spawn_area_2_2)
+        ..union(gg_rct_spawn_area_2_3)
+        ..minus(gg_rct_Thief_Bush_Cliff_NE))
+    // South east island
+    ..add(new Set()
+        ..union(gg_rct_spawn_area_3_1)
+        ..union(gg_rct_spawn_area_3_2)
+        ..union(gg_rct_spawn_area_3_3)
+        ..minus(gg_rct_Thief_Bush_Cliff_SE))
+    // South west island
+    ..add(new Set()
+        ..union(gg_rct_spawn_area_4_1)
+        ..union(gg_rct_spawn_area_4_2)
+        ..union(gg_rct_spawn_area_4_3)
+        ..minus(gg_rct_Thief_Bush_Cliff_SW_1)
+        ..minus(gg_rct_Thief_Bush_Cliff_SW_2))
+

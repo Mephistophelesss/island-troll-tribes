@@ -34,13 +34,13 @@ LinkedList<Draft> draftList = null
             accordingly. The goal of drafting is to have a map "draft" with the computer playerId for key and the troll unit for value. 
 */
 class Draft
-    IterableMap<player, unit> draft
-    IterableMap<player, int> candidate
-    LinkedList<int> preference
-    LinkedList<int> pool
-    Tribe tribe
-    unit totem
-    bool isDraft
+    private IterableMap<player, unit> draft
+    private IterableMap<player, int> candidate
+    private LinkedList<int> preference
+    private LinkedList<int> pool
+    private Tribe tribe
+    private unit totem
+    private bool isDraft
 
     /**
         Draft object are made for every tribe. when the object is constructed it checks to see if the tribe has any member that is
@@ -161,8 +161,8 @@ class Draft
     defense of ally base, boss killing, etc.
 */
 class Computers
-    LinkedList<Computer> computers = null
-    Tribe tribe
+    private LinkedList<Computer> computers = null
+    private Tribe tribe
 
     /**
         Computers object are made from draft map made from valid Draft objects or from the static method random. If the draft is empty
@@ -173,7 +173,7 @@ class Computers
         computers = new LinkedList<Computer>()
         this.tribe = tribe
         for p in draft
-            computers.add(new Computer(p, draft.get(p)))
+            computers.add(new Computer(p, draft.get(p), tribe))
         if computers.size() == 0
             destroy this
 
