@@ -251,3 +251,33 @@ public function unit.isBoss() returns bool
 // TODO: Use UnitEnterLeave so that this is called automatically.
 public function unit.correctColor()
     this.setColor(this.getOwner().getColor())
+
+public function unit.isUnitInRangeById(int id, real range) returns bool
+    let nearbyUnits = CreateGroup()
+    ..enumUnitsInRange(this.getPos(), range)
+    for u in nearbyUnits
+        if u.getTypeId() == id
+            nearbyUnits.destr()
+            return true
+    nearbyUnits.destr()
+    return false
+
+public function unit.isAlliedUnitInRangeById(int id, real range ) returns bool
+    let nearbyUnits = CreateGroup()
+    ..enumUnitsInRange(this.getPos(), range)
+    for u in nearbyUnits
+        if u.getTypeId() == id and u.isAllyOf(this)
+            nearbyUnits.destr()
+            return true
+    nearbyUnits.destr()
+    return false
+
+public function unit.getAlliedUnitInRangeById(int id, real range) returns unit
+    let nearbyUnits = CreateGroup()
+    ..enumUnitsInRange(this.getPos(), range)
+    for u in nearbyUnits
+        if u.getTypeId() == id and u.isAllyOf(this)
+            nearbyUnits.destr()
+            return u
+    nearbyUnits.destr()
+    return null

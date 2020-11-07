@@ -25,7 +25,7 @@ import StringExtensions
 import Transformation
 
 // Cargo Load sound effect used for corpse grab/drop
-let CORPSE_LOAD_SOUND = new SoundDefinition(Sounds.loading, false, true)
+public SoundDefinition CORPSE_LOAD_SOUND = new SoundDefinition(Sounds.loading, false, true)
 
 // The time for which new abilities are disabled to prevent accidental rollback.
 // TODO: Use a per-player setting for this.
@@ -104,7 +104,7 @@ let DROP_IDS = asList(
 @configurable StringLevelClosure getGrabIcon = lvl -> GRAB_ICONS.get(lvl)
 
 // The number of corpses each unit is carrying.
-let counts = new HashMap<unit, int>
+public HashMap<unit, int> counts = new HashMap<unit, int>
 
 // The units whose orders are ignored.
 let disabled = new HashList<unit>
@@ -248,7 +248,7 @@ function onGrab(unit caster, unit target)
     // Increment the count.
     updateCount(caster, 1)
 
-function updateCount(unit target, int differential)
+public function updateCount(unit target, int differential)
     // Exit if no work is required.
     if differential == 0
         return

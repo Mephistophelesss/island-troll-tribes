@@ -1,0 +1,51 @@
+package Area
+
+import LinkedList
+import GameConfig
+import GameMode
+import Geometry
+
+LinkedList<Set> islands
+
+public class Area
+    private Set currentIsland
+
+    construct(rect spawn)
+        for island in islands
+            // Maybe set should take rect instead of vec2 points for attribute in has method
+            if island.has(spawn.getCenter())
+                currentIsland = island
+
+    function getRandomWalkablePoint() returns vec2
+        return currentIsland.getRandomElement(true)
+
+init
+    GameMode.onModeSelectionFinish() ->
+        if gameConfig.aiEnabled
+            // Linked List of island clockwise starting from north west and ending with South west (stack is counter clockwise)
+            islands = new LinkedList<Set>()
+            // North west island
+            ..add(new Set()
+                ..union(gg_rct_spawn_area_1_1)
+                ..union(gg_rct_spawn_area_1_2)
+                ..union(gg_rct_spawn_area_1_3)
+                ..minus(gg_rct_Thief_Bush_Cliff_NW))
+            // North east island
+            ..add(new Set()
+                ..union(gg_rct_spawn_area_2_1)
+                ..union(gg_rct_spawn_area_2_2)
+                ..union(gg_rct_spawn_area_2_3)
+                ..minus(gg_rct_Thief_Bush_Cliff_NE))
+            // South east island
+            ..add(new Set()
+                ..union(gg_rct_spawn_area_3_1)
+                ..union(gg_rct_spawn_area_3_2)
+                ..union(gg_rct_spawn_area_3_3)
+                ..minus(gg_rct_Thief_Bush_Cliff_SE))
+            // South west island
+            ..add(new Set()
+                ..union(gg_rct_spawn_area_4_1)
+                ..union(gg_rct_spawn_area_4_2)
+                ..union(gg_rct_spawn_area_4_3)
+                ..minus(gg_rct_Thief_Bush_Cliff_SW_1)
+                ..minus(gg_rct_Thief_Bush_Cliff_SW_2))

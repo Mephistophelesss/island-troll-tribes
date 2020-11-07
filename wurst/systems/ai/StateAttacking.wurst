@@ -1,11 +1,10 @@
-package Attacking
+package StateAttacking
 
 import State
 import Computer
 
 public class Attacking extends State
-    construct(Computer computer, real runTime)
-        super(computer, runTime)
+    construct(Computer computer, int firstTick)
+        super(computer, firstTick)
 
-    override function update(real runTime)
-        skip
+    override function main()

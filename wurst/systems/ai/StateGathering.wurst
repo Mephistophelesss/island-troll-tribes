@@ -4,7 +4,9 @@ import Computer
 import State
 
 public class Gathering extends State
-    construct(Computer computer, real runTime)
-        super(computer, runTime)
+    construct(Computer computer, int firstTick)
+        super(computer, firstTick)
     
-    override function update(real runTime)
+    override function main()
+
+    override function full()

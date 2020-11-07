@@ -6,42 +6,128 @@ import Geometry
 import LinkedList
 import LocalObjectIDs
 import OrderIds
+import UnitExtensions
+import MoveCorpses
+
+constant FIRE_BUILD_TIME = 7.0
+
+enum subMainStates
+    HUNT
+    GRABMEAT
+    EXPLORE
 
 public class Hunting extends State
-    unit target
-    Point waypoint
-    construct(Computer computer, real runTime)
-        super(computer, runTime)
-    override function update(real runTime)
-        if waypoint == null
-            waypoint = new Point(computer.getSpace().getRandomPoint())
-        else if computer.getTroll().getPos().inRange(waypoint.getTarget(), 10)
-            waypoint = waypoint.close()
-            if (waypoint == null)
-                print("wow it set it to null")
-        else if(target == null)
-            print("Waypoint : " + waypoint.getTarget().toString())
-            print("Current Position : " + computer.getTroll().getPos().toString())
-            move(waypoint.getTarget())
-            let temp = CreateGroup()
-            ..enumUnitsInRange(computer.getTroll().getPos(), 8000, Filter(-> begin 
-                return GetFilterUnit().getOwner() == players[PLAYER_NEUTRAL_AGGRESSIVE] and GetFilterUnit().isAlive()
-            end))
-            for u in temp
-                if not IsUnitVisible(u, computer.getPlayer())
-                    temp.removeUnit(u)
-            let sortDistance = temp.asList()
-            sortDistance.sortWith(unitDistanceCp)
+    private unit target
+    private vec2 targetPos
+    private vec2 approxTargPos
+    private int targetTS
+    private subMainStates epsilon
+    construct(Computer computer, int firstTick)
+        super(computer, firstTick)
+        epsilon = subMainStates.EXPLORE
+        
+    override function main()
+        switch epsilon
+            case HUNT
+                hunt()
+            case GRABMEAT
+                grabMeat(targetPos)
+            case EXPLORE
+                explore()
+            default
+                sTransition(subMainStates.EXPLORE)
 
-            for u in sortDistance
-                if(u.getTypeId() == UNIT_ELK)
-                    target = u
-                    break
-        else
-            if target.isAlive()
-                print("Hunting : " + target.getName() + ", Position :" + target.getPos().toString())
-                move(target.getPos())
-                if target.getPos().distanceToSq(computer.getTroll().getPos()) < 150
-                    computer.getTroll().issueTargetOrderById(OrderIds.web, target)
+    private function sTransition(subMainStates epsilon)
+        this.epsilon = epsilon
+
+    private function sTransition(subMainStates epsilon, real time)
+        this.epsilon = epsilon
+        transition(subStates.MAIN, troll.getPos(), time)
+
+    override protected function full()
+        if build(ITEM_FIRE_KIT, UNIT_FIRE) and not troll.isAlliedUnitInRangeById(UNIT_FIRE, 700)
+            if troll.getMana() < troll.getMaxMana() * 60 and troll.getHeat() > 20
+                troll.issueTargetOrderById(OrderIds.sleep, troll)
+                transition(subStates.IDLE, BUFF_SLEEP, FIRE_BUILD_TIME)
             else
-                target = null
+                sTransition(subMainStates.EXPLORE, FIRE_BUILD_TIME)
+        else if troll.isAlliedUnitInRangeById(UNIT_FIRE, 700) 
+            if counts.get(troll) > 0
+                troll.issueImmediateOrderById(OrderIds.replenish)
+            else if hasItemInRadius(ITEM_COOKED_MEAT, 700)
+                pickItem(ITEM_COOKED_MEAT, 700)
+            else if not getUnitsInRadius(troll.getAlliedUnitInRangeById(UNIT_FIRE, 700).getPos(), UNIT_MEAT, 700).isEmpty()
+                troll.getAlliedUnitInRangeById(UNIT_FIRE, 700).issueImmediateOrderById(OrderIds.battlestations)
+            else
+                sTransition(subMainStates.EXPLORE)
+
+    function explore()
+        stats()
+        if findAnimalTarget()
+            sTransition(subMainStates.HUNT)
+        else
+            exploreArea()
+    
+    private function hunt()
+        statsUrgent()
+        attackTarget()
+
+    private function grabMeat(vec2 pos)
+        statsUrgent()
+        if not pickingCorpse(pos) and tick mod 3 == 0
+            sTransition(subMainStates.EXPLORE)
+
+    private function findAnimalTarget() returns bool
+        let temp = CreateGroup()
+        ..enumUnitsInRange(troll.getPos(), 2500)
+        for u in temp
+            if not IsUnitVisible(u, owner)
+                temp.removeUnit(u)
+        let sort = temp.asList()
+        if not sort.has(target)
+            sort.add(target)
+        sort.sortWith((a, b) -> unitDistanceSort(a, b))
+        // sort.sortWith((a, b) -> unitHealthSort(a, b))
+
+        for u in sort
+            if(u.getTypeId() == UNIT_ELK)
+                this.target = u
+                return true
+        return false
+
+    private function attackTarget()
+        if target.isAlive()
+            targetPos = target.getPos()
+            if IsUnitVisible(target, owner)
+                targetTS = tick
+                if not target.isImmobilized()
+                    if target.getHP() == target.getMaxHP()
+                        if computer.isDistanceBT(targetPos, 128)
+                            move(target.getPos())
+                        else if tick mod 2 == 0 and computer.isDistanceLT(targetPos, 128) and troll.getAbilityCooldownRemaining(ABILITY_HUNTER_WEB) == 0.0
+                            troll.issueTargetOrderById(OrderIds.web, target)
+                    else 
+                        if tick mod 2 == 0 and computer.isDistanceLT(targetPos, 700) and troll.getAbilityCooldownRemaining(ABILITY_HUNTER_WEB) == 0.0
+                            troll.issueTargetOrderById(OrderIds.web, target)
+                        else if troll.getAbilityCooldownRemaining(ABILITY_HUNTER_WEB) > 0.0 and target.getTypeId() == UNIT_ELK
+                            move(target.getPos() + target.getFacingAngle().direction(200))
+                else
+                    if target.getHP() > target.getMaxHP() * .33 and target.isImmobilized() and troll.getAbilityCooldownRemaining(ABILITY_HUNTER_WEB) <= 2.5 and target.getTypeId() == UNIT_ELK
+                        move(target.getPos() + target.getFacingAngle().direction(200))
+                    else if computer.isDistanceBT(targetPos, 128)
+                        move(target.getPos())
+                    else if tick mod 2 == 0
+                        attack(target)
+            else if (tick - targetTS) < 20
+                // Totally hacking because it knows the position will see
+                // what i can do to improve that
+                approxTargPos = targetPos
+                if tick mod 2 == 0 and computer.isDistanceBT(targetPos, 128)
+                    move(targetPos)
+            else if computer.isDistanceBT(approxTargPos, 128)
+                move(approxTargPos)
+            else
+                sTransition(subMainStates.EXPLORE)
+        else
+            sTransition(subMainStates.GRABMEAT)
+            

@@ -2,22 +2,33 @@ package Geometry
 import LinkedList
 import ErrorHandling
 import TerrainUtils
-
-LinkedList<Set> islands
+import LocalObjectIDs
+import BuildingDummy
 
 public class Point
+    private unit uTarget
     private vec2 target
     private bool isWalkable
     construct(vec2 target)
         this.target = target
-    // TODO: Maybe there's a better way to overload the constructor
+
     construct(vec2 target, bool checkWalkable)
-        if target.isTerrainWalkable() and  checkWalkable
+        if target.isTerrainWalkable() and checkWalkable
             this.target = target
             this.isWalkable = true
         else
             this.target = target
             this.isWalkable = false
+
+    construct(unit target)
+        this.uTarget = target
+        this.target = target.getPos()
+
+    function update()
+        this.target = uTarget.getPos()
+
+    function update(vec2 target)
+        this.target = target
 
     function getTarget() returns vec2
         return this.target
@@ -25,11 +36,55 @@ public class Point
     function isWalkable() returns bool
         return isWalkable
 
+    function isBuildable() returns bool
+        var isBuildable = false
+        if not uTarget == null
+            DUMMY_BUILDER.setOwner(uTarget.getOwner(), false)
+            isBuildable = IssueBuildOrderById(DUMMY_BUILDER, UNIT_DUMMY_BUILDING, this.getTarget().x, this.getTarget().y)
+            DUMMY_BUILDER.setOwner(players[PLAYER_NEUTRAL_PASSIVE], false)
+        else
+            isBuildable = IssueBuildOrderById(DUMMY_BUILDER, UNIT_DUMMY_BUILDING, this.getTarget().x, this.getTarget().y)
+        return isBuildable
+
+    function sortClosestToTarget(Point a, Point b) returns int
+        return (target.toTileCenter().distanceToSq(a.getTarget()) - target.toTileCenter().distanceToSq(b.getTarget())).round()
+
+    function getNearestBuildable() returns vec2
+        let latticePoints = new LinkedList<Point>
+        let buildPoints = new LinkedList<Point>
+        for int i = 0 to 100
+            for int j = 0 to 2*(i)+1 // y axis
+                for int k = 0 to 2*(i)+1 // x axis
+                    let center = ((2*i+1)/2).ceil()
+                    var x = 0.
+                    var y = 0.
+                    if j < center
+                        y = -64.*(center - j)
+                    else if j > center
+                        y = 64.*(j - center)
+                    else
+                        y = 0
+                    if k < center
+                        x = -64.*(center - k)
+                    else if k > center
+                        x = 64.*(k - center)
+                    else
+                        x = 0
+                    latticePoints.add(new Point(target.toTileCenter() + vec2(x,y)))
+            for point in latticePoints
+                if point.isBuildable()
+                    buildPoints.add(point)
+            if not buildPoints.isEmpty()
+                buildPoints.sortWith((Point a, Point b) -> sortClosestToTarget(a, b))
+                return buildPoints.getFirst().getTarget()
+            latticePoints.clear()
+        return this.getTarget()
+
     function close() returns thistype
         destroy this
         return null
 
-class Set
+public class Set
     private LinkedList<rect> subSets
     private LinkedList<rect> invalidSet
     private region familySet
@@ -68,21 +123,23 @@ class Set
                 break
         return point.isInRegion(familySet) and isValid
 
-    function getRandomElement() returns vec2
+    function getRandomElement(bool isWalkable) returns vec2
         if not subSets.isEmpty()
             let points = new LinkedList<Point>()
             while points.isEmpty()
                 for elements in subSets
-                    let point = new Point(elements.randomPoint(), true)
-                    if point.isWalkable() and this.has(point.getTarget())
+                    let point = new Point(elements.randomPoint(), isWalkable)
+                    if isWalkable
+                        if point.isWalkable() and this.has(point.getTarget())
+                            points.add(point)
+                    else if this.has(point.getTarget())
                         points.add(point)
-                        print(points.size().toString())
                     else
                         point.close()
             points.shuffle()
             return points.peek().getTarget()
         else
-            error("ERROR: Trying to get random point from empty Set object defined in Space package!")
+            error("ERROR: Trying to get random point from empty Set object defined in Geometry package!")
             return vec2(0,0)
 
     function getRect() returns rect
@@ -106,45 +163,4 @@ class Set
                     points[1].x > points[3].x ? points[1].x : points[3].x,
                     points[0].y > points[1].y ? points[0].y : points[1].y)
 
-public class Space
-    private Set currentIsland
-
-    construct(rect spawn)
-        for island in islands
-            // Maybe set should take rect instead of vec2 points for attribute in has method
-            if island.has(spawn.getCenter())
-                currentIsland = island
-
-    function getRandomPoint() returns vec2
-        return currentIsland.getRandomElement()
-
-
-init
-    // Linked List of island clockwise starting from north west and ending with South west (stack is counter clockwise)
-    islands = new LinkedList<Set>()
-    // North west island
-    ..add(new Set()
-        ..union(gg_rct_spawn_area_1_1)
-        ..union(gg_rct_spawn_area_1_2)
-        ..union(gg_rct_spawn_area_1_3)
-        ..minus(gg_rct_Thief_Bush_Cliff_NW))
-    // North east island
-    ..add(new Set()
-        ..union(gg_rct_spawn_area_2_1)
-        ..union(gg_rct_spawn_area_2_2)
-        ..union(gg_rct_spawn_area_2_3)
-        ..minus(gg_rct_Thief_Bush_Cliff_NE))
-    // South east island
-    ..add(new Set()
-        ..union(gg_rct_spawn_area_3_1)
-        ..union(gg_rct_spawn_area_3_2)
-        ..union(gg_rct_spawn_area_3_3)
-        ..minus(gg_rct_Thief_Bush_Cliff_SE))
-    // South west island
-    ..add(new Set()
-        ..union(gg_rct_spawn_area_4_1)
-        ..union(gg_rct_spawn_area_4_2)
-        ..union(gg_rct_spawn_area_4_3)
-        ..minus(gg_rct_Thief_Bush_Cliff_SW_1)
-        ..minus(gg_rct_Thief_Bush_Cliff_SW_2))
 

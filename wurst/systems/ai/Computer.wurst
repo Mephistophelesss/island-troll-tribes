@@ -3,7 +3,7 @@ import PlayerExtensions
 import ClosureTimers
 import Trolls
 import LinkedList
-import Geometry
+import Area
 import Tribe
 import initlater State
 import initlater StateAttacking
@@ -12,7 +12,17 @@ import initlater StateGathering
 import initlater StateHunting
 import initlater StateIdle
 
-public real UPDATE_INTERVAL = 0.2
+public real TICK_INTERVAL = 0.2
+
+enum Class
+    BEASTMASTER
+    GATHERER
+    HUNTER
+    MAGE
+    PRIEST
+    SCOUT
+    THIEF
+    UNKNOWN
 
 // Role dictactes if it should prioritize hunting or gathering
 enum Roles
@@ -30,24 +40,26 @@ public class Computer
     private player  owner
     private unit    troll
     private Tribe   tribe
-    private real    runTime
-    private Space   space
+    private int     tick
+    private Area    currentArea
     private States  currentState
-    private States  nextState
     private State   state
     private Roles   role
+    private Class   _class
 
     construct(player owner, unit troll, Tribe tribe)
         this.owner  = owner
         this.troll  = troll
         this.tribe  = tribe
+        this.tick   = 0
+        PauseCompAI(owner, true)
         initialize()
 
-        doPeriodically(UPDATE_INTERVAL) cb ->
+        doPeriodically(TICK_INTERVAL) cb ->
             // Here we run the decision making algorithm and juggle between possible states depending on multiple factors
             // (stats, inventory, raw meat, vision of enemy, ...)
-            state.update(this.runTime)
-            runTime += UPDATE_INTERVAL
+            state.update(this.tick)
+            tick++
             if(owner.getTribe().isDefeated())
                 destroy cb
                 destroy this
@@ -58,19 +70,19 @@ public class Computer
         this.currentState = targetState
         switch currentState
             case ATTACKING
-                state = new Attacking(this, runTime)
+                state = new Attacking(this, tick)
                 chat("I'm attacking")
             case HUNTING
-                state = new Hunting(this, runTime)
+                state = new Hunting(this, tick)
                 chat("I'm hunting")
             case FLEEING
-                state = new Fleeing(this, runTime)
+                state = new Fleeing(this, tick)
                 chat("I'm fleeing")
             case GATHERING
-                state = new Gathering(this, runTime)
+                state = new Gathering(this, tick)
                 chat("I'm gathering")
             default
-                state = new Idle(this, runTime)
+                state = new Idle(this, tick)
                 chat("I'm idle")
 
     private function updateRole(Roles role)
@@ -91,32 +103,40 @@ public class Computer
         let entity = UnitEntity.findForUnit(this.troll)
         switch i
             case (entity instanceof Hunter).toInt()
+                _class = Class.HUNTER
                 updateRole(Roles.HUNTER)
             case (entity instanceof BeastMaster).toInt()
+                _class = Class.BEASTMASTER
                 updateRole(Roles.HUNTER)
             case (entity instanceof Gatherer).toInt()
+                _class = Class.GATHERER
                 updateRole(Roles.GATHERER)
             case (entity instanceof Thief).toInt()
+                _class = Class.THIEF
                 updateRole(Roles.GATHERER)
             case (entity instanceof Scout).toInt()
+                _class = Class.SCOUT
                 updateRole(Roles.GATHERER)
             case (entity instanceof Priest).toInt()
+                _class = Class.PRIEST
                 updateRole(Roles.GATHERER)
             case (entity instanceof Mage).toInt()
+                _class = Class.MAGE
                 updateRole(Roles.GATHERER)
             default
+                _class = Class.UNKNOWN
                 updateRole(Roles.GATHERER)
                 
     private function initialize()
         findRole()
-        this.space = new Space(tribe.getSpawn())
+        this.currentArea = new Area(tribe.getSpawn())
 
     function chat(string message)
         owner.getTribe().getMembers().forEach() member ->
             printTimedToPlayer(owner.getColor().toColor().toColorString() + troll.getName() + " (BOT)|r: " + message, 10, member)
 
-    function getSpace() returns Space
-        return space
+    function getCurrentArea() returns Area
+        return currentArea
 
     function getCurrentState() returns States
         return currentState
@@ -127,3 +147,8 @@ public class Computer
     function getPlayer() returns player
         return owner
 
+public function Computer.isDistanceBT(vec2 target, real distance) returns bool
+    return target.distanceTo(this.getTroll().getPos()) > distance
+
+public function Computer.isDistanceLT(vec2 target, real distance) returns bool
+    return target.distanceTo(this.getTroll().getPos()) <= distance

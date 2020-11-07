@@ -1,28 +1,266 @@
 package State
 
-import initlater Computer
-import LinkedList
+import Computer
 import OrderIds
+import Geometry
+import MoveCorpses
+import LocalObjectIDs
+import SoundUtils
+import GameConfig
+import TerrainUtils
+import UnitExtensions
+import Tribe
+import LinkedList
+import RegisterEvents
+import ClosuresForItems
+import ClosureForGroups
+import PlayerExtensions
+import Troll
+import UnitEntity
+import HashMap
 
-interface Predicate<T>
-    function update(real runTime)
+class ItemContext
+    bool hasItem
+    construct()
+        this.hasItem = false
 
-public abstract class State implements Predicate<State>
-    Computer computer
-    Comparator<unit> unitDistanceCp
-    real localRunTime
-    real runTime
-    construct(Computer computer, real runTime)
+    function close()
+        destroy this
+
+public enum subStates
+    MAIN
+    HUNT
+    GATHER
+    STUCK
+    FULL
+    STATS
+    IDLE
+
+public abstract class State
+
+    // Protected Members:
+    protected Computer computer
+    protected subStates symbol
+    protected subStates prevSymbol
+    protected int firstTick
+    protected int tick
+    protected vec2 temp
+    protected vec2 buildingPoint
+    protected unit troll
+    protected player owner
+
+    // Private Members:
+    private bool returnPrev
+    private int _typeId
+    private Point curPoint
+    private int transTime
+    private Point waypoint
+
+    // Static Members:
+    static HashMap<unit,int> builders = new HashMap<unit,int>()
+
+    construct(Computer computer, int firstTick)
         this.computer = computer
-        this.localRunTime = -runTime
-        this.unitDistanceCp = (a, b) -> unitDistanceSort(a,b)
+        this.firstTick = firstTick
+        this.tick = 0
+        this.troll = computer.getTroll()
+        this.owner = computer.getPlayer()
+        this.returnPrev = false
+        this.symbol = subStates.MAIN
+        this.curPoint = new Point(troll)
 
-    function move(vec2 target)
-        computer.getTroll().issuePointOrderById(Orders.moveAI, target)
+    function update(int tick)
+        this.tick = tick
+        panic()
+        switch symbol
+            case MAIN
+                if transTime == 0
+                    main()
+                else
+                    timedMain()
+            case FULL
+                full()
+            case IDLE
+                idle()
+            default
+                transition(subStates.MAIN)
+        
+    function changeState(States nextState)
+        computer.transition(nextState)
 
-    function unitDistanceSort(unit a, unit b) returns int
-        return (computer.getTroll().getPos().distanceToSq(a.getPos()) - computer.getTroll().getPos().distanceToSq(b.getPos())).round()
+    /**
+        Protected transition functions:
+            execute transition between sub states enumerated in update
+    */
+    protected function transition(subStates symbol)
+        this.symbol = symbol
+
+    protected function transition(subStates symbol, int buffId)
+        this.prevSymbol = this.symbol
+        this._typeId = buffId
+        transition(symbol)
+
+    protected function transition(subStates symbol, real time)
+        this.prevSymbol = this.symbol
+        this.transTime = (tick + (time/.2)).ceil()
+        transition(symbol)
+        
+    protected function transition(subStates symbol, vec2 loc, real time)
+        this.temp = loc
+        transition(symbol, time)
+
+    protected function transition(subStates symbol, int buffId, real time)
+        this.transTime = (tick + (time/.2)).ceil()
+        transition(symbol, buffId)
+
+    /**
+        abstract main function:
+            where the main loop is executed in the extended states
+    */
+    abstract function main()
+
+    protected function timedMain()
+        if this.tick >= transTime
+            if computer.isDistanceBT(temp, 300)
+                move(temp)
+            else
+                symbol = prevSymbol
+        else
+            main()
+    
+    protected function full() // doesn't have to be abstract because some state dont have full.
+
+    protected function build(int itemId,int buildingId) returns bool
+        // I don't know where but it seems to get stuck somewhere (doesn't return either true or false) after building the fire
+        // I added an extra condition so it wouldn't get stuck
+        if troll.hasItemById(itemId) and not builders.has(troll)
+            builders.put(troll, buildingId)
+            troll.useItemPoint(troll.getItemById(itemId), curPoint.getNearestBuildable())
+        else if builders.has(troll)
+            if builders.get(troll) == 0
+                builders.remove(troll)
+                return true
+            else if tick mod 10 == 0
+                curPoint.update()
+                troll.useItemPoint(troll.getItemById(itemId), curPoint.getNearestBuildable())
+        return false
+
+    protected function Eat()
+
+    protected function stats()
+        if troll.getMana() <= troll.getMaxMana() * 0.20 and troll.getHeat() > 35
+            troll.issueTargetOrderById(OrderIds.sleep, troll)
+            transition(subStates.IDLE, BUFF_SLEEP, 6.)
+        else if troll.getHeat() <= 35
+            skip
+            // find fire 
+    protected function statsUrgent()
+        if troll.getMana() <= troll.getMaxMana() * 0.10 and troll.getHeat() > 30
+            troll.issueTargetOrderById(OrderIds.sleep, troll)
+            transition(subStates.IDLE, BUFF_SLEEP, 6.)
+
+    private function idle()
+        if tick == transTime or troll.getAbilityLevel(_typeId) > 0
+            transTime = 0
+            _typeId = 0
+            if returnPrev
+                returnPrev = false
+                transition(prevSymbol)
+            else
+                transition(subStates.MAIN)
+        
+    protected function panic()
+        if troll.getMana() > troll.getMaxMana() * 0.20 and troll.getAbilityCooldownRemaining(OrderIds.berserk) == 0
+            troll.issueImmediateOrderById(OrderIds.berserk)          
+
+    protected function move(vec2 target)
+        troll.issuePointOrderById(Orders.moveAI, target)
+
+    protected function attack(unit target)
+        troll.issueTargetOrderById(Orders.attack, target)
+
+    protected function unitDistanceSort(unit a, unit b) returns int
+        return (troll.getPos().distanceToSq(a.getPos()) - troll.getPos().distanceToSq(b.getPos())).round()
+
+    protected function unitHealthSort(unit a, unit b) returns int
+        return (a.getHP() - b.getHP()).round()
+
+    protected function hasItemInRadius(int itemId, real radius) returns bool
+        let searchRect = Rect(0., 0., radius, radius)
+        let ctx = new ItemContext()
+        forItemsInRect(searchRect) (item i) ->
+            if i.getTypeId() == itemId
+                ctx.hasItem = true
+        if ctx.hasItem
+            ctx.close()
+            return true
+        return false
+
+    protected function pickItem(int itemId, real radius)
+        let searchRect = Rect(0., 0., radius, radius)
+        forItemsInRect(searchRect) (item i) ->
+            if i.getTypeId() == itemId
+                troll.issueTargetOrderById(OrderIds.smart, i)   
+
+    protected function getUnitsInRadius(vec2 target, int unitId, real radius) returns LinkedList<unit>
+        let unitList = new LinkedList<unit>
+        forUnitsInRange(target, radius) (unit u) ->
+            if u.getTypeId() == unitId
+                unitList.add(u)
+        return unitList
+
+    protected function pickingCorpse(vec2 target) returns bool
+        var hasCorpse = true
+        let corpses = getUnitsInRadius(target, UNIT_MEAT, 300)
+        if not corpses.isEmpty()
+            if computer.isDistanceBT(target, 128)
+                move(target)
+            else if counts.get(troll) + corpses.size() > 8
+                hasCorpse = false
+                transition(subStates.FULL)
+            else if counts.get(troll) < 8 and tick mod 2 == 0
+                if computer.isDistanceLT(corpses.peek().getPos(), 128)
+                    // Apparently might cause desync
+                    //CORPSE_LOAD_SOUND.playOnPoint(troll.getPos3Real())
+                    troll.setAnimation("Spell")
+                    updateCount(troll, 1)
+                    corpses.pop().remove()
+                else if computer.isDistanceBT(corpses.peek().getPos(), 128) and corpses.peek().getPos().isTerrainWalkable()
+                    move(corpses.peek().getPos())
+                else
+                    hasCorpse = false 
+            else if counts.get(troll) >= 8
+                hasCorpse = false
+                transition(subStates.FULL)
+            else if not target.isTerrainWalkable()
+                hasCorpse = false
+                transition(subStates.MAIN)
+        else
+            hasCorpse = false
+        return hasCorpse
+
+    protected function exploreArea()
+        // TODO: MT suggested using bool instead of null ref for condition
+        if waypoint == null
+            waypoint = new Point(computer.getCurrentArea().getRandomWalkablePoint())
+        else if computer.isDistanceLT(waypoint.getTarget(), 100)
+            waypoint = waypoint.close()
+        else if tick mod 2 == 0
+            move(waypoint.getTarget())
 
     function close() returns thistype
         destroy this
         return null
+
+init
+    registerPlayerUnitEvent(EVENT_PLAYER_UNIT_CONSTRUCT_START) ->
+        // Simplest way to track back, with building transfering owner
+        if gameConfig.isTribeOwnsBuildingsEnabled()
+            forUnitsInRange(GetTriggerUnit().getPos(), 500) (unit u) ->
+                let entity = UnitEntity.findForUnit(u)
+                if entity instanceof Troll
+                    if State.builders.has(u)
+                        State.builders.remove(u)
+                        State.builders.put(u, 0)
+        else if State.builders.get(GetTriggerPlayer().getTroll()) == GetTriggerUnit().getTypeId()
+            State.builders.put(GetTriggerPlayer().getTroll(), 0)

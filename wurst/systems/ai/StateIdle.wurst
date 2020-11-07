@@ -3,8 +3,8 @@ import Computer
 import State
 
 public class Idle extends State
-    construct(Computer computer, real runTime)
-        super(computer, runTime)
+    construct(Computer computer, int firstTick)
+        super(computer, firstTick)
 
-    override function update(real runTime)
+    override function main()
         skip
