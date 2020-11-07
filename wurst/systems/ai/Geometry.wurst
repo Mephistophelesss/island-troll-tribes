@@ -25,7 +25,8 @@ public class Point
         this.target = target.getPos()
 
     function update()
-        this.target = uTarget.getPos()
+        if not uTarget == null
+            this.target = uTarget.getPos()
 
     function update(vec2 target)
         this.target = target
@@ -88,6 +89,7 @@ public class Set
     private LinkedList<rect> subSets
     private LinkedList<rect> invalidSet
     private region familySet
+
     construct()
         subSets = new LinkedList<rect>()
         invalidSet = new LinkedList<rect>()
@@ -112,8 +114,7 @@ public class Set
         else if r.getCenter().isInRegion(familySet)
             hasPoint = true
         if hasPoint == true
-            invalidSet.add(r)
-                    
+            invalidSet.add(r)    
 
     function has(vec2 point) returns bool
         var isValid = true
@@ -162,5 +163,14 @@ public class Set
                     points[2].y < points[3].y ? points[2].y : points[3].y,
                     points[1].x > points[3].x ? points[1].x : points[3].x,
                     points[0].y > points[1].y ? points[0].y : points[1].y)
+
+    function close() returns thistype
+        destroy this
+        return null
+
+    ondestroy
+        subSets.clear()
+        invalidSet.clear()
+        familySet.destr()
 
 

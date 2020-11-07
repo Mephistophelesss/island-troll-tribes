@@ -1,0 +1,14 @@
+package MyPackage
+
+import Geometry
+import PlayerExtensions
+import LocalObjectIDs
+
+init
+    let t = CreateTrigger()
+    t.addAction() ->
+        let a = new Point(players[0].getTroll())
+        let b = a.getNearestBuildable()
+        print(b.toString())
+        print(createUnit(players[0], UNIT_FIRE, b, angle(0)).getPos().toString())
+    t.registerPlayerChatEvent(players[0], "-buildable", false )
