@@ -319,6 +319,6 @@ init
                 gameConfig.setStartingLevel(lvl)
                 mode.message("Troll Starting Level".color(ENERGY_COLOR) + " set to " + lvl.toString())
 
-    new GameMode("enable-ai", "eai", "Testing", "Replaces AI of computer players. Warning : this mode is experimental and modifying base modes will most likely result in malfunctions.", false) (mode, args) ->
+    new GameMode("enable-ai", "eai", "Testing", "Replaces AI of computer players. Warning : this mode is experimental", false) (mode, args) ->
         gameConfig.setAIEnabled(true)
-        mode.message("Computers will now be controlled by a custom AI")
+        mode.message("Computers will now be controlled by a custom AI. Warning : this mode is experimental and modifying base modes will most likely result in malfunctions")

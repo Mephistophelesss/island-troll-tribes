@@ -84,7 +84,7 @@ let DROP_ICONS = asList(
 )
 
 // The IDs used for the drop abilities by default.
-let DROP_IDS = asList(
+public LinkedList<int> DROP_IDS = asList(
     // A placeholder value used for a dummy ability.
     compiletime(ABIL_ID_GEN.next()),
     LocalAbilityIds.corpseDrop1,
@@ -186,7 +186,7 @@ function unit.canMoveCorpses() returns bool
     return false
 
 // Switches between ability tracks, outputting the new ability ID.
-function switchAbilities(unit target) returns int
+public function switchAbilities(unit target) returns int
     // Look up the state for the unit.
     let count = counts.get(target)
 

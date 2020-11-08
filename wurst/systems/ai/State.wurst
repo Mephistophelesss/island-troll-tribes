@@ -29,11 +29,8 @@ class ItemContext
 
 public enum subStates
     MAIN
-    HUNT
-    GATHER
     STUCK
     FULL
-    STATS
     IDLE
 
 public abstract class State
@@ -74,13 +71,16 @@ public abstract class State
         panic()
         switch symbol
             case MAIN
+                print("main")
                 if transTime == 0
                     main()
                 else
                     timedMain()
             case FULL
+                print("full")
                 full()
             case IDLE
+                print("idle")
                 idle()
             default
                 transition(subStates.MAIN)
@@ -96,11 +96,13 @@ public abstract class State
         this.symbol = symbol
 
     protected function transition(subStates symbol, int buffId)
+        this.returnPrev = true
         this.prevSymbol = this.symbol
         this._typeId = buffId
         transition(symbol)
 
     protected function transition(subStates symbol, real time)
+        this.returnPrev = true
         this.prevSymbol = this.symbol
         this.transTime = (tick + (time/.2)).ceil()
         transition(symbol)
@@ -130,20 +132,16 @@ public abstract class State
     
     protected function full() // doesn't have to be abstract because some state dont have full.
 
-    protected function build(int itemId,int buildingId) returns bool
-        // I don't know where but it seems to get stuck somewhere (doesn't return either true or false) after building the fire
-        // I added an extra condition so it wouldn't get stuck
-        if troll.hasItemById(itemId) and not builders.has(troll)
+    protected function build(int itemId,int buildingId)
+        print(builders.has(troll))
+        if not builders.has(troll)
+            curPoint.update()
             builders.put(troll, buildingId)
             troll.useItemPoint(troll.getItemById(itemId), curPoint.getNearestBuildable())
         else if builders.has(troll)
-            if builders.get(troll) == 0
-                builders.remove(troll)
-                return true
-            else if tick mod 10 == 0
+            if tick mod 10 == 0
                 curPoint.update()
                 troll.useItemPoint(troll.getItemById(itemId), curPoint.getNearestBuildable())
-        return false
 
     protected function Eat()
 
@@ -160,10 +158,12 @@ public abstract class State
             transition(subStates.IDLE, BUFF_SLEEP, 6.)
 
     private function idle()
+        print("idle")
         if tick == transTime or troll.getAbilityLevel(_typeId) > 0
             transTime = 0
             _typeId = 0
             if returnPrev
+                print("return prev")
                 returnPrev = false
                 transition(prevSymbol)
             else
@@ -185,9 +185,16 @@ public abstract class State
     protected function unitHealthSort(unit a, unit b) returns int
         return (a.getHP() - b.getHP()).round()
 
+    protected function getAlliedUnitInRadiusById(vec2 target, int unitId, real radius) returns LinkedList<unit>
+        let unitList = getUnitsInRadius(target, unitId, radius)
+        for u in unitList
+            if not u.isAllyOf(owner)
+                unitList.remove(u)
+        return unitList
+    
     protected function hasItemInRadius(int itemId, real radius) returns bool
         let searchRect = Rect(0., 0., radius, radius)
-        let ctx = new ItemContext()
+        let ctx = new ItemContext() // TODO : check if you need to use context for the item closure
         forItemsInRect(searchRect) (item i) ->
             if i.getTypeId() == itemId
                 ctx.hasItem = true
@@ -212,26 +219,35 @@ public abstract class State
     protected function pickingCorpse(vec2 target) returns bool
         var hasCorpse = true
         let corpses = getUnitsInRadius(target, UNIT_MEAT, 300)
+        let point = new Point(corpses.peek().getPos())
+        // Check if we have corpses with a radius of 300 around the target vec2
         if not corpses.isEmpty()
+            // Move if we are far from the target
             if computer.isDistanceBT(target, 128)
                 move(target)
-            else if counts.get(troll) + corpses.size() > 8
+            // Check if the amount of carrying corpse + the corpse on the ground are higher than 8 and our troll has a fire with a nearby spot to build it
+            else if counts.get(troll) + corpses.size() > 8 and troll.hasItemById(ITEM_FIRE_KIT) and point.getTarget().distanceTo(point.getNearestBuildable()) < 500
                 hasCorpse = false
                 transition(subStates.FULL)
+            // Check if we have less than 8 carrying corpses with an interval of 2 ticks
             else if counts.get(troll) < 8 and tick mod 2 == 0
+                // If we ares lose enough to the corpse (could increase the distance a little bit) we fake picking up meat
                 if computer.isDistanceLT(corpses.peek().getPos(), 128)
                     // Apparently might cause desync
                     //CORPSE_LOAD_SOUND.playOnPoint(troll.getPos3Real())
                     troll.setAnimation("Spell")
                     updateCount(troll, 1)
                     corpses.pop().remove()
+                // If we are not close enough check if the vec2 is pathable and try to move toward it
                 else if computer.isDistanceBT(corpses.peek().getPos(), 128) and corpses.peek().getPos().isTerrainWalkable()
                     move(corpses.peek().getPos())
                 else
                     hasCorpse = false 
+            // Check if we are full if so we transition to full substate
             else if counts.get(troll) >= 8
                 hasCorpse = false
                 transition(subStates.FULL)
+            // if the target is not pathable then return to main substate
             else if not target.isTerrainWalkable()
                 hasCorpse = false
                 transition(subStates.MAIN)

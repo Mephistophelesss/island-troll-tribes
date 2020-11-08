@@ -22,10 +22,11 @@ public class Hunting extends State
     private vec2 approxTargPos
     private int targetTS
     private subMainStates epsilon
+    private bool hasTarget
     construct(Computer computer, int firstTick)
         super(computer, firstTick)
         epsilon = subMainStates.EXPLORE
-        
+        hasTarget = false
     override function main()
         switch epsilon
             case HUNT
@@ -45,21 +46,37 @@ public class Hunting extends State
         transition(subStates.MAIN, troll.getPos(), time)
 
     override protected function full()
-        if build(ITEM_FIRE_KIT, UNIT_FIRE) and not troll.isAlliedUnitInRangeById(UNIT_FIRE, 700)
-            if troll.getMana() < troll.getMaxMana() * 60 and troll.getHeat() > 20
-                troll.issueTargetOrderById(OrderIds.sleep, troll)
-                transition(subStates.IDLE, BUFF_SLEEP, FIRE_BUILD_TIME)
-            else
-                sTransition(subMainStates.EXPLORE, FIRE_BUILD_TIME)
-        else if troll.isAlliedUnitInRangeById(UNIT_FIRE, 700) 
+        if troll.hasItemById(ITEM_FIRE_KIT) or builders.has(troll)
+            print("1")
+            if troll.hasItemById(ITEM_FIRE_KIT)
+                build(ITEM_FIRE_KIT, UNIT_FIRE)
+            else if builders.get(troll) == 0
+                if troll.getMana() < troll.getMaxMana() * 60 and troll.getHeat() > 20
+                    troll.issueTargetOrderById(OrderIds.sleep, troll)
+                    builders.remove(troll)
+                    transition(subStates.IDLE, BUFF_SLEEP, FIRE_BUILD_TIME)
+                else
+                    // Maybe there's a better routine to do while waiting for fire to build
+                    builders.remove(troll)
+                    sTransition(subMainStates.EXPLORE, FIRE_BUILD_TIME)
+        else if not getAlliedUnitInRadiusById(troll.getPos(), UNIT_FIRE, 500).isEmpty()
+            print("2")
+            let fire = getAlliedUnitInRadiusById(troll.getPos(), UNIT_FIRE, 500).peek()
+            statsUrgent()
             if counts.get(troll) > 0
-                troll.issueImmediateOrderById(OrderIds.replenish)
+                // Switch depending on weither or not the unit has drop raw ability
+                if not troll.hasAbility(DROP_IDS.get(counts.get(troll)))
+                    switchAbilities(troll)
+                else
+                    troll.issueImmediateOrderById(OrderIds.replenish)
             else if hasItemInRadius(ITEM_COOKED_MEAT, 700)
+                // Doesn't work yet, need to work on it
                 pickItem(ITEM_COOKED_MEAT, 700)
-            else if not getUnitsInRadius(troll.getAlliedUnitInRangeById(UNIT_FIRE, 700).getPos(), UNIT_MEAT, 700).isEmpty()
-                troll.getAlliedUnitInRangeById(UNIT_FIRE, 700).issueImmediateOrderById(OrderIds.battlestations)
+            else if not getUnitsInRadius(fire.getPos(), UNIT_MEAT, 700).isEmpty()
+                fire.issueImmediateOrderById(OrderIds.battlestations)
             else
                 sTransition(subMainStates.EXPLORE)
+        print("3")
 
     function explore()
         stats()
@@ -70,7 +87,10 @@ public class Hunting extends State
     
     private function hunt()
         statsUrgent()
-        attackTarget()
+        if hasTarget
+            attackTarget()
+        else
+            sTransition(subMainStates.EXPLORE)
 
     private function grabMeat(vec2 pos)
         statsUrgent()
@@ -86,16 +106,19 @@ public class Hunting extends State
         let sort = temp.asList()
         if not sort.has(target)
             sort.add(target)
+        // TODO : better sorting
         sort.sortWith((a, b) -> unitDistanceSort(a, b))
         // sort.sortWith((a, b) -> unitHealthSort(a, b))
 
         for u in sort
             if(u.getTypeId() == UNIT_ELK)
                 this.target = u
+                hasTarget = true
                 return true
         return false
 
     private function attackTarget()
+        // ** This is tailored to hunter and wont work for other classes, using this to structure the states
         if target.isAlive()
             targetPos = target.getPos()
             if IsUnitVisible(target, owner)
@@ -114,7 +137,7 @@ public class Hunting extends State
                 else
                     if target.getHP() > target.getMaxHP() * .33 and target.isImmobilized() and troll.getAbilityCooldownRemaining(ABILITY_HUNTER_WEB) <= 2.5 and target.getTypeId() == UNIT_ELK
                         move(target.getPos() + target.getFacingAngle().direction(200))
-                    else if computer.isDistanceBT(targetPos, 128)
+                    else if computer.isDistanceBT(targetPos, 128) // maybe change this to max attack range rather than 128
                         move(target.getPos())
                     else if tick mod 2 == 0
                         attack(target)
@@ -124,10 +147,12 @@ public class Hunting extends State
                 approxTargPos = targetPos
                 if tick mod 2 == 0 and computer.isDistanceBT(targetPos, 128)
                     move(targetPos)
-            else if computer.isDistanceBT(approxTargPos, 128)
+            else if computer.isDistanceBT(approxTargPos, 200)
                 move(approxTargPos)
             else
+                hasTarget = false
                 sTransition(subMainStates.EXPLORE)
         else
+            hasTarget = false
             sTransition(subMainStates.GRABMEAT)
             
