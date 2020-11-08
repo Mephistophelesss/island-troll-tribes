@@ -52,7 +52,7 @@ public class Computer
         this.troll  = troll
         this.tribe  = tribe
         this.tick   = 0
-        PauseCompAI(owner, true)
+        PauseCompAI(owner, true) // TODO : this does not work, but there should be a way to disable the generic AI (autocasting net, etc.) (I think I read somewhere garithos and shared control should be a lead)
         initialize()
 
         doPeriodically(TICK_INTERVAL) cb ->

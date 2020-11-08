@@ -2,33 +2,45 @@ package StateHunting
 
 import State
 import Computer
-import Geometry
 import LinkedList
 import LocalObjectIDs
+import ObjectIds
 import OrderIds
 import UnitExtensions
 import MoveCorpses
 
-constant FIRE_BUILD_TIME = 7.0
+constant FIRE_BUILD_DURATION = 7.0
+constant SLEEP_DURATION = 6.0
 
-enum subMainStates
+enum subRoutines
     HUNT
     GRABMEAT
     EXPLORE
+
+/**
+    Here's a list of bugs to fix :
+        -Make bot wait longer near fire to regain Heat
+        -When bot goes to cook meat, make him go closer if it needs to regain Heat
+        -When hunting and unit has one hit less and its running away, just finish it off instead of bodyblocking
+        -The time the bot should start moving for body block when unit is still netted should depend on the unit facing angle
+        (when the unit is roughly facing the hunter time should be 0, but if it's facing the other direction time should be ~0.6 (3 ticks))
+*/
 
 public class Hunting extends State
     private unit target
     private vec2 targetPos
     private vec2 approxTargPos
     private int targetTS
-    private subMainStates epsilon
+    private subRoutines sRout
     private bool hasTarget
+    private bool isWaitingConstruction
     construct(Computer computer, int firstTick)
         super(computer, firstTick)
-        epsilon = subMainStates.EXPLORE
-        hasTarget = false
+        sRout = subRoutines.EXPLORE
+        hasTarget = false // Safety net, but all conditions are considered we can possibly remove it
+        isWaitingConstruction = false
     override function main()
-        switch epsilon
+        switch sRout
             case HUNT
                 hunt()
             case GRABMEAT
@@ -36,66 +48,83 @@ public class Hunting extends State
             case EXPLORE
                 explore()
             default
-                sTransition(subMainStates.EXPLORE)
+                sTransition(subRoutines.EXPLORE)
 
-    private function sTransition(subMainStates epsilon)
-        this.epsilon = epsilon
+    private function sTransition(subRoutines sRout)
+        this.sRout = sRout
+        transition(routines.MAIN)
 
-    private function sTransition(subMainStates epsilon, real time)
-        this.epsilon = epsilon
-        transition(subStates.MAIN, troll.getPos(), time)
+    private function sTransition(subRoutines sRout, real time)
+        this.sRout = sRout
+        transition(routines.MAIN, troll.getPos(), time)
 
     override protected function full()
         if troll.hasItemById(ITEM_FIRE_KIT) or builders.has(troll)
-            print("1")
             if troll.hasItemById(ITEM_FIRE_KIT)
                 build(ITEM_FIRE_KIT, UNIT_FIRE)
+                isWaitingConstruction = true
             else if builders.get(troll) == 0
                 if troll.getMana() < troll.getMaxMana() * 60 and troll.getHeat() > 20
                     troll.issueTargetOrderById(OrderIds.sleep, troll)
                     builders.remove(troll)
-                    transition(subStates.IDLE, BUFF_SLEEP, FIRE_BUILD_TIME)
+                    transition(routines.IDLE, BUFF_SLEEP, SLEEP_DURATION)
                 else
                     // Maybe there's a better routine to do while waiting for fire to build
                     builders.remove(troll)
-                    sTransition(subMainStates.EXPLORE, FIRE_BUILD_TIME)
+                    sTransition(subRoutines.EXPLORE, FIRE_BUILD_DURATION)
         else if not getAlliedUnitInRadiusById(troll.getPos(), UNIT_FIRE, 500).isEmpty()
-            print("2")
             let fire = getAlliedUnitInRadiusById(troll.getPos(), UNIT_FIRE, 500).peek()
-            statsUrgent()
+            // HashMap buildings returns if the building has finished constructing or not
+            // This should make the bot able to drop meat while it's waiting for the fire to finish building
+            if isWaitingConstruction and buildings.has(fire)
+                if buildings.get(fire)
+                    buildings.remove(fire)
+                    isWaitingConstruction = false
+                else if counts.get(troll) > 0
+                    // Switch depending on weither or not the unit has drop raw ability
+                    if not troll.hasAbility(DROP_IDS.get(counts.get(troll)))
+                        switchAbilities(troll)
+                    else
+                        troll.issueImmediateOrderById(OrderIds.replenish)
             if counts.get(troll) > 0
                 // Switch depending on weither or not the unit has drop raw ability
                 if not troll.hasAbility(DROP_IDS.get(counts.get(troll)))
                     switchAbilities(troll)
                 else
                     troll.issueImmediateOrderById(OrderIds.replenish)
-            else if hasItemInRadius(ITEM_COOKED_MEAT, 700)
-                // Doesn't work yet, need to work on it
-                pickItem(ITEM_COOKED_MEAT, 700)
+            else if isItemInRadius(troll.getPos(), ITEM_COOKED_MEAT, 700)
+                pickItem(troll.getPos(), ITEM_COOKED_MEAT, 700)
             else if not getUnitsInRadius(fire.getPos(), UNIT_MEAT, 700).isEmpty()
                 fire.issueImmediateOrderById(OrderIds.battlestations)
             else
-                sTransition(subMainStates.EXPLORE)
-        print("3")
+                sTransition(subRoutines.EXPLORE)
+        else
+            if not getAlliedUnitInRadiusById(troll.getPos(), UNIT_FIRE, 4000).isEmpty()
+                let fires = getAlliedUnitInRadiusById(troll.getPos(), UNIT_FIRE, 4000)
+                fires.sortWith((a, b) -> unitDistanceSort(a, b))
+                move(fires.pop().getPos())
+            // else craft a fire we need to make item memory first, might aswell do unit memory
+            // best idea here is to create the base object feature first?
+
 
     function explore()
-        stats()
-        if findAnimalTarget()
-            sTransition(subMainStates.HUNT)
-        else
-            exploreArea()
+        if not stats()
+            if findAnimalTarget()
+                sTransition(subRoutines.HUNT)
+            else
+                exploreArea()
     
     private function hunt()
-        statsUrgent()
-        if hasTarget
-            attackTarget()
-        else
-            sTransition(subMainStates.EXPLORE)
+        if not statsUrgent()
+            if hasTarget
+                attackTarget()
+            else
+                sTransition(subRoutines.EXPLORE)
 
     private function grabMeat(vec2 pos)
-        statsUrgent()
-        if not pickingCorpse(pos) and tick mod 3 == 0
-            sTransition(subMainStates.EXPLORE)
+        if not statsUrgent()
+            if not pickingCorpse(pos) and tick mod 3 == 0
+                sTransition(subRoutines.EXPLORE)
 
     private function findAnimalTarget() returns bool
         let temp = CreateGroup()
@@ -123,6 +152,7 @@ public class Hunting extends State
             targetPos = target.getPos()
             if IsUnitVisible(target, owner)
                 targetTS = tick
+                // TARGET CAN MOVE
                 if not target.isImmobilized()
                     if target.getHP() == target.getMaxHP()
                         if computer.isDistanceBT(targetPos, 128)
@@ -130,17 +160,38 @@ public class Hunting extends State
                         else if tick mod 2 == 0 and computer.isDistanceLT(targetPos, 128) and troll.getAbilityCooldownRemaining(ABILITY_HUNTER_WEB) == 0.0
                             troll.issueTargetOrderById(OrderIds.web, target)
                     else 
+                        // Tries to net unit with given interval to not cancel the animation
                         if tick mod 2 == 0 and computer.isDistanceLT(targetPos, 700) and troll.getAbilityCooldownRemaining(ABILITY_HUNTER_WEB) == 0.0
                             troll.issueTargetOrderById(OrderIds.web, target)
-                        else if troll.getAbilityCooldownRemaining(ABILITY_HUNTER_WEB) > 0.0 and target.getTypeId() == UNIT_ELK
-                            move(target.getPos() + target.getFacingAngle().direction(200))
+                        // Net if on cooldown
+                        else if troll.getAbilityCooldownRemaining(ABILITY_HUNTER_WEB) > 0.0
+                            // Should return true when the unit is not moving
+                            if GetUnitCurrentOrder(target) == "none".fromRawCode()
+                                move(target.getPos())
+                            // Else if the unit is moving try to go infront of it
+                            else if target.getTypeId() == UNIT_ELK and computer.isDistanceLT(targetPos, 300)
+                                move(target.getPos() + target.getFacingAngle().direction(200))
+                            // Elk ran to africa and is still running
+                            else 
+                                move(target.getPos())
+                        // unit is moving and net is off cooldown (not close enough to net I guess)
+                        else if computer.isDistanceBT(targetPos, 700)
+                            move(target.getPos())
+                        // this might be uneeded and cause problem?
+                        else if tick mod 2 == 0 
+                            attack(target)
+                // TARGET IS IMMOBILIZED
                 else
-                    if target.getHP() > target.getMaxHP() * .33 and target.isImmobilized() and troll.getAbilityCooldownRemaining(ABILITY_HUNTER_WEB) <= 2.5 and target.getTypeId() == UNIT_ELK
-                        move(target.getPos() + target.getFacingAngle().direction(200))
-                    else if computer.isDistanceBT(targetPos, 128) // maybe change this to max attack range rather than 128
-                        move(target.getPos())
+                    // TODO : marsun suggested canceling attack animation
+                    if not troll.hasAbility(ABILITY_TRACK) or troll.getAbilityCooldownRemaining(ABILITY_TRACK) > 0 or target.getAbilityLevel(BUFF_TRACKED) > 1
+                        if target.getHP() > target.getMaxHP() * .33 and troll.getAbilityCooldownRemaining(ABILITY_HUNTER_WEB) <= 2.8 and target.getTypeId() == UNIT_ELK
+                            move(target.getPos() + target.getFacingAngle().direction(200))
+                        else if computer.isDistanceBT(targetPos, 128) // maybe change this to max attack range rather than 128
+                            move(target.getPos())
+                        else if tick mod 2 == 0
+                            attack(target)
                     else if tick mod 2 == 0
-                        attack(target)
+                        troll.issueTargetOrderById(OrderIds.faeriefire, target)
             else if (tick - targetTS) < 20
                 // Totally hacking because it knows the position will see
                 // what i can do to improve that
@@ -151,8 +202,8 @@ public class Hunting extends State
                 move(approxTargPos)
             else
                 hasTarget = false
-                sTransition(subMainStates.EXPLORE)
+                sTransition(subRoutines.EXPLORE)
         else
             hasTarget = false
-            sTransition(subMainStates.GRABMEAT)
+            sTransition(subRoutines.GRABMEAT)
             

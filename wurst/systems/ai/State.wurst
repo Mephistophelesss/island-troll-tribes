@@ -9,7 +9,6 @@ import SoundUtils
 import GameConfig
 import TerrainUtils
 import UnitExtensions
-import Tribe
 import LinkedList
 import RegisterEvents
 import ClosuresForItems
@@ -27,18 +26,32 @@ class ItemContext
     function close()
         destroy this
 
-public enum subStates
+public enum routines
     MAIN
     STUCK
     FULL
     IDLE
+/**
+    TODO :
+        -Finish the basic routine that execute the maintenance (eat, stats, etc.)
+    
+    Structures to make :
+        -Class to have "base" object, also memory for items and possible hunting targets***
+        -Something with target vectors to localize if theres any structures or fake trees blocking the way (we can use hacks here to help 
+        with the lack of conciousness)**
+        -Analyse the surroundings of the troll*
+            i.e. : elk is facing the hunter and the hunter position is neighbor to 2 unpathable object (basically the hunter is blocking the elk)
+            then the hunter shouldn't try to body block
+        -Some kind of algorithm to do get more efficient waypoints for exploration (take into accounts unit killed/items gathered) to know
+        when to move to a new island. (should be done in the area package)**
 
+*/
 public abstract class State
 
     // Protected Members:
     protected Computer computer
-    protected subStates symbol
-    protected subStates prevSymbol
+    protected routines rout
+    protected routines prevRout
     protected int firstTick
     protected int tick
     protected vec2 temp
@@ -55,6 +68,7 @@ public abstract class State
 
     // Static Members:
     static HashMap<unit,int> builders = new HashMap<unit,int>()
+    static HashMap<unit,bool> buildings = new HashMap<unit,bool>()
 
     construct(Computer computer, int firstTick)
         this.computer = computer
@@ -63,13 +77,13 @@ public abstract class State
         this.troll = computer.getTroll()
         this.owner = computer.getPlayer()
         this.returnPrev = false
-        this.symbol = subStates.MAIN
+        this.rout = routines.MAIN
         this.curPoint = new Point(troll)
 
     function update(int tick)
         this.tick = tick
         panic()
-        switch symbol
+        switch rout
             case MAIN
                 print("main")
                 if transTime == 0
@@ -83,7 +97,7 @@ public abstract class State
                 print("idle")
                 idle()
             default
-                transition(subStates.MAIN)
+                transition(routines.MAIN)
         
     function changeState(States nextState)
         computer.transition(nextState)
@@ -92,28 +106,28 @@ public abstract class State
         Protected transition functions:
             execute transition between sub states enumerated in update
     */
-    protected function transition(subStates symbol)
-        this.symbol = symbol
+    protected function transition(routines rout)
+        this.rout = rout
 
-    protected function transition(subStates symbol, int buffId)
+    protected function transition(routines rout, int buffId)
         this.returnPrev = true
-        this.prevSymbol = this.symbol
+        this.prevRout = this.rout
         this._typeId = buffId
-        transition(symbol)
+        transition(rout)
 
-    protected function transition(subStates symbol, real time)
+    protected function transition(routines rout, real time)
         this.returnPrev = true
-        this.prevSymbol = this.symbol
+        this.prevRout = this.rout
         this.transTime = (tick + (time/.2)).ceil()
-        transition(symbol)
+        transition(rout)
         
-    protected function transition(subStates symbol, vec2 loc, real time)
+    protected function transition(routines rout, vec2 loc, real time)
         this.temp = loc
-        transition(symbol, time)
+        transition(rout, time)
 
-    protected function transition(subStates symbol, int buffId, real time)
+    protected function transition(routines rout, int buffId, real time)
         this.transTime = (tick + (time/.2)).ceil()
-        transition(symbol, buffId)
+        transition(rout, buffId)
 
     /**
         abstract main function:
@@ -126,7 +140,7 @@ public abstract class State
             if computer.isDistanceBT(temp, 300)
                 move(temp)
             else
-                symbol = prevSymbol
+                rout = prevRout
         else
             main()
     
@@ -145,17 +159,21 @@ public abstract class State
 
     protected function Eat()
 
-    protected function stats()
+    protected function stats() returns bool
         if troll.getMana() <= troll.getMaxMana() * 0.20 and troll.getHeat() > 35
             troll.issueTargetOrderById(OrderIds.sleep, troll)
-            transition(subStates.IDLE, BUFF_SLEEP, 6.)
+            transition(routines.IDLE, BUFF_SLEEP, 6.)
+            return true
         else if troll.getHeat() <= 35
             skip
             // find fire 
-    protected function statsUrgent()
+        return false
+    protected function statsUrgent() returns bool
         if troll.getMana() <= troll.getMaxMana() * 0.10 and troll.getHeat() > 30
             troll.issueTargetOrderById(OrderIds.sleep, troll)
-            transition(subStates.IDLE, BUFF_SLEEP, 6.)
+            transition(routines.IDLE, BUFF_SLEEP, 6.)
+            return true
+        return false
 
     private function idle()
         print("idle")
@@ -165,9 +183,9 @@ public abstract class State
             if returnPrev
                 print("return prev")
                 returnPrev = false
-                transition(prevSymbol)
+                transition(prevRout)
             else
-                transition(subStates.MAIN)
+                transition(routines.MAIN)
         
     protected function panic()
         if troll.getMana() > troll.getMaxMana() * 0.20 and troll.getAbilityCooldownRemaining(OrderIds.berserk) == 0
@@ -180,7 +198,10 @@ public abstract class State
         troll.issueTargetOrderById(Orders.attack, target)
 
     protected function unitDistanceSort(unit a, unit b) returns int
-        return (troll.getPos().distanceToSq(a.getPos()) - troll.getPos().distanceToSq(b.getPos())).round()
+        return (troll.getPos().distanceTo(a.getPos()) - troll.getPos().distanceTo(b.getPos())).round()
+
+    protected function itemDistanceSort(item a, item b) returns int
+        return (troll.getPos().distanceTo(a.getPos()) - troll.getPos().distanceTo(b.getPos())).round()
 
     protected function unitHealthSort(unit a, unit b) returns int
         return (a.getHP() - b.getHP()).round()
@@ -192,22 +213,30 @@ public abstract class State
                 unitList.remove(u)
         return unitList
     
-    protected function hasItemInRadius(int itemId, real radius) returns bool
+    protected function isItemInRadius(vec2 target, int itemId, real radius) returns bool
         let searchRect = Rect(0., 0., radius, radius)
-        let ctx = new ItemContext() // TODO : check if you need to use context for the item closure
+        let ctx = new ItemContext() // TODO : maybe you dont have to use context
+        searchRect.moveTo(target)
         forItemsInRect(searchRect) (item i) ->
             if i.getTypeId() == itemId
                 ctx.hasItem = true
         if ctx.hasItem
             ctx.close()
             return true
+        ctx.close()
         return false
 
-    protected function pickItem(int itemId, real radius)
+    protected function pickItem(vec2 target, int itemId, real radius)
         let searchRect = Rect(0., 0., radius, radius)
+        let itemList = new LinkedList<item>()
+        searchRect.moveTo(target)
         forItemsInRect(searchRect) (item i) ->
             if i.getTypeId() == itemId
-                troll.issueTargetOrderById(OrderIds.smart, i)   
+                itemList.add(i)
+        itemList.sortWith((a, b) -> itemDistanceSort(a, b))
+        // not sure how fast it can pick item
+        for i in itemList
+            troll.issueTargetOrderById(OrderIds.smart, i) 
 
     protected function getUnitsInRadius(vec2 target, int unitId, real radius) returns LinkedList<unit>
         let unitList = new LinkedList<unit>
@@ -228,7 +257,7 @@ public abstract class State
             // Check if the amount of carrying corpse + the corpse on the ground are higher than 8 and our troll has a fire with a nearby spot to build it
             else if counts.get(troll) + corpses.size() > 8 and troll.hasItemById(ITEM_FIRE_KIT) and point.getTarget().distanceTo(point.getNearestBuildable()) < 500
                 hasCorpse = false
-                transition(subStates.FULL)
+                transition(routines.FULL)
             // Check if we have less than 8 carrying corpses with an interval of 2 ticks
             else if counts.get(troll) < 8 and tick mod 2 == 0
                 // If we ares lose enough to the corpse (could increase the distance a little bit) we fake picking up meat
@@ -243,14 +272,14 @@ public abstract class State
                     move(corpses.peek().getPos())
                 else
                     hasCorpse = false 
-            // Check if we are full if so we transition to full substate
+            // Check if we are full if so we transition to full routine
             else if counts.get(troll) >= 8
                 hasCorpse = false
-                transition(subStates.FULL)
-            // if the target is not pathable then return to main substate
+                transition(routines.FULL)
+            // if the target is not pathable then return to main routine
             else if not target.isTerrainWalkable()
                 hasCorpse = false
-                transition(subStates.MAIN)
+                transition(routines.MAIN)
         else
             hasCorpse = false
         return hasCorpse
@@ -271,12 +300,18 @@ public abstract class State
 init
     registerPlayerUnitEvent(EVENT_PLAYER_UNIT_CONSTRUCT_START) ->
         // Simplest way to track back, with building transfering owner
-        if gameConfig.isTribeOwnsBuildingsEnabled()
-            forUnitsInRange(GetTriggerUnit().getPos(), 500) (unit u) ->
-                let entity = UnitEntity.findForUnit(u)
-                if entity instanceof Troll
-                    if State.builders.has(u)
-                        State.builders.remove(u)
-                        State.builders.put(u, 0)
-        else if State.builders.get(GetTriggerPlayer().getTroll()) == GetTriggerUnit().getTypeId()
-            State.builders.put(GetTriggerPlayer().getTroll(), 0)
+        if gameConfig.isAIEnabled()
+            if gameConfig.isTribeOwnsBuildingsEnabled()
+                forUnitsInRange(GetTriggerUnit().getPos(), 500) (unit u) ->
+                    let entity = UnitEntity.findForUnit(u)
+                    if entity instanceof Troll
+                        if State.builders.has(u)
+                            State.buildings.put(GetTriggerUnit(), false)
+                            State.builders.put(u, 0)
+            else if State.builders.get(GetTriggerPlayer().getTroll()) == GetTriggerUnit().getTypeId()
+                State.buildings.put(GetTriggerUnit(), false)
+                State.builders.put(GetTriggerPlayer().getTroll(), 0)
+    registerPlayerUnitEvent(EVENT_PLAYER_UNIT_CONSTRUCT_FINISH) ->
+        if gameConfig.isAIEnabled()
+            if State.buildings.has(GetTriggerUnit())
+                State.buildings.put(GetTriggerUnit(), true)

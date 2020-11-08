@@ -23,6 +23,8 @@ import UnitExtensions
 LinkedList<Computers> computersList = null
 LinkedList<Draft> draftList = null
 
+// TODO : Only spawn troll when eai is active (this is done in Tribe package), and investigate possibility of some weird interaction with win condition and bots
+
 /**
     Draft classes for the computer during selection time. Drafting is divised in 2 phases :
         Candidate drafting phase:
